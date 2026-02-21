@@ -33,8 +33,7 @@ jobs:
       - name: Test coverage (server)
         run: npm run test:coverage --workspace=@openlivesync/server
 
-      - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
         with:
-          files: packages/server/coverage/lcov.info
-          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
