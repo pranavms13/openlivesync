@@ -1,7 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import * as http from "node:http";
 import { WebSocket } from "ws";
-import { createWebSocketServer, createInMemoryChatStorage } from "./index.js";
+import {
+  createServer,
+  createWebSocketServer,
+  createWebSocketHandler,
+  createInMemoryChatStorage,
+} from "./index.js";
 import { MSG_JOIN_ROOM, MSG_ROOM_JOINED, MSG_SEND_CHAT, MSG_CHAT_MESSAGE } from "./protocol.js";
 
 describe("WebSocket server integration", () => {
@@ -150,6 +155,69 @@ describe("WebSocket server integration", () => {
 
     ws1.close();
     ws2.close();
+    await new Promise<void>((resolve) => srv.close(() => resolve()));
+  });
+});
+
+describe("createServer and createWebSocketHandler", () => {
+  it("createServer returns server with .ws WebSocketServer", async () => {
+    const server = createServer({ port: 0 });
+    expect(server).toBeDefined();
+    expect((server as { ws?: unknown }).ws).toBeDefined();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+  });
+
+  it("createWebSocketHandler ignores upgrade on wrong path", () => {
+    const handler = createWebSocketHandler({ path: "/live" });
+    const request = { url: "/other" } as http.IncomingMessage;
+    const socket = { destroy: () => {} } as import("node:stream").Duplex;
+    const head = Buffer.alloc(0);
+    expect(() => handler(request, socket, head)).not.toThrow();
+  });
+
+  it("onAuth returning null closes connection with 4401", async () => {
+    const srv = http.createServer((_req, res) => {
+      res.writeHead(200);
+      res.end();
+    });
+    createWebSocketServer(srv, {
+      path: "/auth",
+      onAuth: async () => null,
+    });
+    await new Promise<void>((resolve) => srv.listen(0, () => resolve()));
+    const addr = srv.address();
+    const port = typeof addr === "object" && addr && "port" in addr ? addr.port : 0;
+
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/auth`);
+    const closeEvent = await new Promise<{ code: number }>((resolve) => {
+      ws.on("close", (code: number) => resolve({ code }));
+    });
+    expect(closeEvent.code).toBe(4401);
+
+    await new Promise<void>((resolve) => srv.close(() => resolve()));
+  });
+
+  it("onAuth throwing closes connection with 4500", async () => {
+    const srv = http.createServer((_req, res) => {
+      res.writeHead(200);
+      res.end();
+    });
+    createWebSocketServer(srv, {
+      path: "/auth2",
+      onAuth: async () => {
+        throw new Error("auth failed");
+      },
+    });
+    await new Promise<void>((resolve) => srv.listen(0, () => resolve()));
+    const addr = srv.address();
+    const port = typeof addr === "object" && addr && "port" in addr ? addr.port : 0;
+
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/auth2`);
+    const closeEvent = await new Promise<{ code: number }>((resolve) => {
+      ws.on("close", (code: number) => resolve({ code }));
+    });
+    expect(closeEvent.code).toBe(4500);
+
     await new Promise<void>((resolve) => srv.close(() => resolve()));
   });
 });
