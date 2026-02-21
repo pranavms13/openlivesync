@@ -1,7 +1,7 @@
 # OpenLiveSync
 
-[![CI](https://github.com/REPO_OWNER/openlivesync/actions/workflows/ci.yml/badge.svg)](https://github.com/REPO_OWNER/openlivesync/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/REPO_OWNER/openlivesync/branch/main/graph/badge.svg)](https://codecov.io/gh/REPO_OWNER/openlivesync)
+[![CI](https://github.com/pranavms13/openlivesync/actions/workflows/ci.yml/badge.svg)](https://github.com/pranavms13/openlivesync/actions/workflows/ci.yml)
+[![codecov](https://codecov.io/gh/pranavms13/openlivesync/branch/main/graph/badge.svg)](https://codecov.io/gh/pranavms13/openlivesync)
 
 Real-time **presence**, **collaboration events**, and **chat** with a small server package and an optional client.
 
@@ -15,12 +15,10 @@ Real-time **presence**, **collaboration events**, and **chat** with a small serv
 ## Setup
 
 ```bash
-git clone https://github.com/REPO_OWNER/openlivesync.git
+git clone https://github.com/pranavms13/openlivesync.git
 cd openlivesync
 npm install
 ```
-
-**Badges:** Replace `REPO_OWNER` in this README (badge URLs and clone URL above) with your GitHub username or org. Add the repo at [codecov.io](https://codecov.io) so the coverage badge shows live results.
 
 ## Scripts (from repo root)
 
