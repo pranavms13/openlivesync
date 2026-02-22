@@ -43,5 +43,9 @@
     "better-sqlite3": {
       "optional": true
     }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pranavms13/openlivesync.git"
   }
 }
