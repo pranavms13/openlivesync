@@ -1,6 +1,6 @@
 # @openlivesync/server
 
-Node.js server package for **OpenLiveSync**. Provides WebSocket-based **presence**, **live collaboration events**, and **chat** with pluggable storage.
+Node.js server package for OpenLiveSync. Provides WebSocket-based presence, live collaboration events, and chat with pluggable storage.
 
 ## Features
 

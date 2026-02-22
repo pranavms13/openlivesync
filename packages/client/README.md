@@ -1,6 +1,6 @@
 # @openlivesync/client
 
-Browser client for **OpenLiveSync**: connect to an `@openlivesync/server` over WebSocket for **presence**, **broadcast events**, and **chat**. Use the core API or the optional React hooks.
+Browser client for OpenLiveSync: connect to an `@openlivesync/server` over WebSocket for presence, broadcast events, and chat. Use the core API or the optional React hooks.
 
 ## Installation
 
