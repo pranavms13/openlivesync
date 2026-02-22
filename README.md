@@ -19,7 +19,7 @@ Real-time **presence**, **collaboration events**, and **chat** with a small serv
 | [examples/server](./examples/server) | Node.js server using `createServer`, path, chat, and optional `createTokenAuth`. |
 | [examples/client](./examples/client) | React app using `LiveSyncProvider`, `useConnectionStatus`, `useRoom`, `usePresence`, `useChat`, and `useLiveSyncClient`. |
 
-From repo root: `npm run build`, then `cd examples/server && npm install && npm run dev` and `cd examples/client && npm install && npm run dev`. Open the client in multiple tabs to see presence and chat in real time.
+From repo root: `npm run build`, then run `npm run dev` to start both the example server and client concurrently. Open the client in multiple tabs to see presence and chat in real time.
 
 ## Setup
 
@@ -36,10 +36,12 @@ npm install
 | `npm run build` | Build all packages. |
 | `npm run clean` | Remove build artifacts. |
 | `npm run lint` | Run ESLint. |
+| `npm version <major\|minor\|patch>` | Bump version at root and in `packages/client` and `packages/server`; use `--no-git-tag-version` to skip commit/tag. |
 
 ## Package scripts
 
 - **Server** (`cd packages/server`): `npm run build`, `npm run test`, `npm run test:watch`, `npm run test:coverage`. See [packages/server/README.md](./packages/server/README.md) for API and usage.
+- **Client** (`cd packages/client`): `npm run build`. See [packages/client/README.md](./packages/client/README.md) for API and usage.
 
 ## License
 

@@ -1,14 +1,19 @@
 {
   "name": "openlivesync",
+  "version": "0.0.2",
   "private": true,
   "type": "module",
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "clean": "npm run clean --workspaces --if-present",
     "dev": "npm install --prefix examples/server && npm install --prefix examples/client && concurrently -n server,client \"npm run dev --prefix examples/server\" \"npm run dev --prefix examples/client\"",
     "lint": "eslint .",
-    "prepare": "husky"
+    "prepare": "husky",
+    "version": "node scripts/version-workspaces.js",
+    "postversion": "node scripts/postversion-amend.js"
   },
   "devDependencies": {
     "concurrently": "^9.1.2",
