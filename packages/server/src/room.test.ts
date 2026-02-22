@@ -43,6 +43,24 @@ describe("Room", () => {
     expect((sent[0] as { payload: { chatHistory?: unknown[] } }).payload.chatHistory).toEqual([]);
   });
 
+  it("join sends room_joined with empty chatHistory when getHistory throws", async () => {
+    const failingStorage = {
+      append: async () => {},
+      getHistory: async () => {
+        throw new Error("storage unavailable");
+      },
+    } as import("./storage/chat-storage.js").ChatStorage;
+    const room = new Room({
+      roomId: "r1",
+      chatStorage: failingStorage,
+      historyLimit: 10,
+    });
+    const { handle, sent } = mockHandle("c1");
+    await room.join(handle);
+    expect(sent).toHaveLength(1);
+    expect((sent[0] as { payload: { chatHistory?: unknown[] } }).payload.chatHistory).toEqual([]);
+  });
+
   it("leave broadcasts presence_updated with left", async () => {
     const storage = createInMemoryChatStorage();
     const room = new Room({ roomId: "r1", chatStorage: storage, historyLimit: 10 });
@@ -77,6 +95,16 @@ describe("Room", () => {
       type: MSG_PRESENCE_UPDATED,
       payload: { roomId: "r1", updated: [{ connectionId: "c1", presence: { cursor: { x: 10 } } }] },
     });
+  });
+
+  it("updatePresence with unknown connectionId does nothing", async () => {
+    const storage = createInMemoryChatStorage();
+    const room = new Room({ roomId: "r1", chatStorage: storage, historyLimit: 10 });
+    const { handle, sent } = mockHandle("c1");
+    await room.join(handle);
+    sent.length = 0;
+    room.updatePresence("unknown-connection", { x: 1 });
+    expect(sent).toHaveLength(0);
   });
 
   it("broadcastEvent relays to others only", async () => {

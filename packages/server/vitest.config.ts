@@ -15,6 +15,7 @@ export default defineConfig({
       exclude: [
         "node_modules/",
         "dist/",
+        "examples/", // examples are demos, not library code
         "**/*.test.ts",
         "**/*.spec.ts",
         "**/db-types.d.ts",
@@ -24,6 +25,7 @@ export default defineConfig({
         "src/storage/sqlite.ts",
         "src/index.ts",
         "src/storage/chat-storage.ts",
+        "src/auth/index.ts",
       ],
     },
   },

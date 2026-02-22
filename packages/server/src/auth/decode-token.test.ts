@@ -63,4 +63,57 @@ describe("decodeAccessToken", () => {
     expect(decoded).not.toBeNull();
     expect(decoded!.provider).toBe("custom");
   });
+
+  it("with custom decodeOnly returns normalized payload without verification", async () => {
+    const token = await new SignJWT({
+      sub: "decode-only-user",
+      email: "do@example.com",
+      iss: "https://custom.issuer.example",
+    })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt()
+      .setExpirationTime("1h")
+      .sign(TEST_SECRET);
+
+    const decoded = await decodeAccessToken(token, {
+      custom: { decodeOnly: true },
+    });
+    expect(decoded).not.toBeNull();
+    expect(decoded!.sub).toBe("decode-only-user");
+    expect(decoded!.email).toBe("do@example.com");
+    expect(decoded!.provider).toBe("custom");
+  });
+
+  it("with Microsoft config sets issuer/audience (verification failure returns null)", async () => {
+    const token = await new SignJWT({
+      sub: "ms-user",
+      preferred_username: "ms@tenant.com",
+      iss: "https://login.microsoftonline.com/tenant-123/v2.0",
+    })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt()
+      .setExpirationTime("1h")
+      .sign(TEST_SECRET);
+
+    const decoded = await decodeAccessToken(token, {
+      microsoft: { tenantId: "tenant-123", clientId: "client-456" },
+    });
+    expect(decoded).toBeNull();
+  });
+
+  it("returns null when verification throws (e.g. invalid signature)", async () => {
+    const token = await new SignJWT({
+      sub: "user",
+      iss: "https://accounts.google.com",
+    })
+      .setProtectedHeader({ alg: "HS256" })
+      .setIssuedAt()
+      .setExpirationTime("1h")
+      .sign(TEST_SECRET);
+
+    const decoded = await decodeAccessToken(token, {
+      google: { clientId: "google-client" },
+    });
+    expect(decoded).toBeNull();
+  });
 });
