@@ -20,6 +20,9 @@ import type { ChatStorage } from "./storage/chat-storage.js";
 export interface RoomConnectionHandle {
   connectionId: string;
   userId?: string;
+  name?: string;
+  email?: string;
+  provider?: string;
   presence: Presence;
   send(msg: ServerMessage): void;
 }
@@ -62,6 +65,9 @@ export class Room {
       presenceMap[c.connectionId] = {
         connectionId: c.connectionId,
         userId: c.userId,
+        name: c.name,
+        email: c.email,
+        provider: c.provider,
         presence: c.presence,
       };
     }
@@ -94,6 +100,9 @@ export class Room {
           {
             connectionId: handle.connectionId,
             userId: handle.userId,
+            name: handle.name,
+            email: handle.email,
+            provider: handle.provider,
             presence: entry.presence,
           },
         ],
@@ -126,6 +135,9 @@ export class Room {
           {
             connectionId: conn.connectionId,
             userId: conn.userId,
+            name: conn.name,
+            email: conn.email,
+            provider: conn.provider,
             presence: conn.presence,
           },
         ],

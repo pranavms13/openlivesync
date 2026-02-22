@@ -25,6 +25,7 @@
     "vitest": "^4.0.0"
   },
   "dependencies": {
+    "jose": "^5.9.6",
     "ws": "^8.19.0"
   },
   "peerDependencies": {
@@ -33,8 +34,14 @@
     "better-sqlite3": "*"
   },
   "peerDependenciesMeta": {
-    "pg": { "optional": true },
-    "mysql2": { "optional": true },
-    "better-sqlite3": { "optional": true }
+    "pg": {
+      "optional": true
+    },
+    "mysql2": {
+      "optional": true
+    },
+    "better-sqlite3": {
+      "optional": true
+    }
   }
 }

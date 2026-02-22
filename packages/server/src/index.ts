@@ -46,6 +46,17 @@ export {
   MSG_ERROR,
 } from "./protocol.js";
 
+// Auth (decode/verify access tokens; Google, Microsoft, custom OAuth)
+export { decodeAccessToken, createTokenAuth } from "./auth/index.js";
+export type {
+  AuthOptions,
+  AuthGoogleConfig,
+  AuthMicrosoftConfig,
+  AuthCustomConfig,
+  CreateTokenAuthOptions,
+  DecodedToken,
+} from "./auth/index.js";
+
 // Chat storage interface and in-memory (no extra deps)
 export type { ChatStorage } from "./storage/chat-storage.js";
 export { createInMemoryChatStorage } from "./storage/in-memory.js";

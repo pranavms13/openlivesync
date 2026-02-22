@@ -10,7 +10,16 @@ Real-time **presence**, **collaboration events**, and **chat** with a small serv
 | Package | Description |
 |--------|-------------|
 | [packages/server](./packages/server) | Node.js server: WebSocket API, rooms, presence, broadcast, chat with pluggable storage (in-memory, Postgres, MySQL, SQLite). |
-| [packages/client](./packages/client) | Browser client (placeholder). |
+| [packages/client](./packages/client) | Browser client: WebSocket API, presence, broadcast, chat; optional React hooks. |
+
+## Examples
+
+| Example | Description |
+|--------|-------------|
+| [examples/server](./examples/server) | Node.js server using `createServer`, path, chat, and optional `createTokenAuth`. |
+| [examples/client](./examples/client) | React app using `LiveSyncProvider`, `useConnectionStatus`, `useRoom`, `usePresence`, `useChat`, and `useLiveSyncClient`. |
+
+From repo root: `npm run build`, then `cd examples/server && npm install && npm run dev` and `cd examples/client && npm install && npm run dev`. Open the client in multiple tabs to see presence and chat in real time.
 
 ## Setup
 

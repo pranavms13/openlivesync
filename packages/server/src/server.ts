@@ -8,6 +8,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { createInMemoryChatStorage } from "./storage/in-memory.js";
 import type { ChatStorage } from "./storage/chat-storage.js";
 import type { UserInfo } from "./protocol.js";
+import type { AuthOptions } from "./auth/index.js";
 import { RoomManager } from "./room-manager.js";
 import { Connection } from "./connection.js";
 
@@ -25,6 +26,8 @@ export interface WebSocketServerOptions {
   path?: string;
   /** If provided and returns null, connection is rejected. */
   onAuth?: (request: http.IncomingMessage) => Promise<UserInfo | null>;
+  /** Optional: decode/verify access tokens in join_room (Google, Microsoft, custom OAuth). */
+  auth?: AuthOptions;
   /** Min interval between presence updates per connection in ms (default: 100). */
   presenceThrottleMs?: number;
   /** Chat storage and history limit. If storage omitted, uses in-memory. */
@@ -70,8 +73,12 @@ function handleUpgrade(
       new Connection(ws, {
         connectionId,
         userId: authResult?.userId,
+        userName: authResult?.name,
+        userEmail: authResult?.email,
+        provider: authResult?.provider,
         presenceThrottleMs,
         roomManager,
+        auth: options.auth,
       });
     };
 

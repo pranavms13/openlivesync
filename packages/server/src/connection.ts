@@ -18,6 +18,8 @@ import {
 } from "./protocol.js";
 import type { RoomManager } from "./room-manager.js";
 import type { RoomConnectionHandle } from "./room.js";
+import { decodeAccessToken } from "./auth/index.js";
+import type { AuthOptions } from "./auth/index.js";
 
 function isClientMessage(msg: unknown): msg is ClientMessage {
   if (msg === null || typeof msg !== "object" || !("type" in msg)) return false;
@@ -39,16 +41,24 @@ function send(ws: WebSocket, msg: ServerMessage): void {
 export interface ConnectionOptions {
   connectionId: string;
   userId?: string;
+  userName?: string;
+  userEmail?: string;
+  provider?: string;
   presenceThrottleMs: number;
   roomManager: RoomManager;
+  auth?: AuthOptions;
 }
 
 export class Connection {
   private readonly ws: WebSocket;
   private readonly connectionId: string;
-  private readonly userId?: string;
+  private userId: string | undefined;
+  private userName: string | undefined;
+  private userEmail: string | undefined;
+  private provider: string | undefined;
   private readonly presenceThrottleMs: number;
   private readonly roomManager: RoomManager;
+  private readonly auth: AuthOptions | undefined;
   private currentRoomId: string | null = null;
   private lastPresenceUpdate = 0;
   private closed = false;
@@ -57,8 +67,12 @@ export class Connection {
     this.ws = ws;
     this.connectionId = options.connectionId;
     this.userId = options.userId;
+    this.userName = options.userName;
+    this.userEmail = options.userEmail;
+    this.provider = options.provider;
     this.presenceThrottleMs = options.presenceThrottleMs;
     this.roomManager = options.roomManager;
+    this.auth = options.auth;
 
     this.ws.on("message", (data: Buffer | string) => this.handleMessage(data));
     this.ws.on("close", () => this.handleClose());
@@ -102,7 +116,16 @@ export class Connection {
   private async dispatch(clientMsg: ClientMessage): Promise<void> {
     switch (clientMsg.type) {
       case MSG_JOIN_ROOM: {
-        const { roomId, presence } = clientMsg.payload;
+        const { roomId, presence, accessToken } = clientMsg.payload;
+        if (accessToken && this.userId === undefined) {
+          const decoded = await decodeAccessToken(accessToken, this.auth);
+          if (decoded) {
+            this.userId = decoded.sub;
+            this.userName = decoded.name;
+            this.userEmail = decoded.email;
+            this.provider = decoded.provider;
+          }
+        }
         if (this.currentRoomId) {
           const room = this.roomManager.get(this.currentRoomId);
           if (room) room.leave(this.connectionId);
@@ -113,6 +136,9 @@ export class Connection {
         const handle: RoomConnectionHandle = {
           connectionId: this.connectionId,
           userId: this.userId,
+          name: this.userName,
+          email: this.userEmail,
+          provider: this.provider,
           presence: {},
           send: (m) => this.send(m),
         };

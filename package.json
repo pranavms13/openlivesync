@@ -6,10 +6,12 @@
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "clean": "npm run clean --workspaces --if-present",
+    "dev": "npm install --prefix examples/server && npm install --prefix examples/client && concurrently -n server,client \"npm run dev --prefix examples/server\" \"npm run dev --prefix examples/client\"",
     "lint": "eslint .",
     "prepare": "husky"
   },
   "devDependencies": {
+    "concurrently": "^9.1.2",
     "@eslint/js": "^10.0.0",
     "eslint": "^10.0.0",
     "husky": "^9.1.7",

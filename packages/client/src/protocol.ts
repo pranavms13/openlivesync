@@ -1,6 +1,6 @@
 /**
- * Wire protocol types for @openlivesync.
- * Shared between server and client; server handles these message types.
+ * Wire protocol types for @openlivesync/client.
+ * Must stay in sync with @openlivesync/server protocol (same message types and payload shapes).
  */
 
 /** Generic presence payload (cursor, name, color, etc.). Server does not interpret. */

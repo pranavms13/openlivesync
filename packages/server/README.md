@@ -89,7 +89,8 @@ Returns a function `(request, socket, head) => void` that you pass to `server.on
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `path` | `string` | `"/live"` | WebSocket upgrade path. |
-| `onAuth` | `(req) => Promise<UserInfo \| null>` | — | If provided, runs on each upgrade. Return `null` to reject the connection (401). Return `{ userId?, ... }` to attach user info to the connection. |
+| `onAuth` | `(req) => Promise<UserInfo \| null>` | — | If provided, runs on each upgrade. Return `null` to reject the connection (401). Return `{ userId?, name?, email?, provider?, ... }` to attach user info to the connection. |
+| `auth` | `AuthOptions` | — | Optional: decode/verify access tokens sent in `join_room`. Supports Google, Microsoft, and custom OAuth (see [Access token and OAuth](#access-token-and-oauth)). When tokens are decoded, `name`, `email`, and `provider` appear in presence and chat. |
 | `presenceThrottleMs` | `number` | `100` | Minimum ms between presence updates per connection. |
 | `chat` | `{ storage?, historyLimit? }` | — | Chat config. Omit `storage` to use in-memory. `historyLimit` is how many messages to send to new joiners (default `100`). |
 | `port` | `number` | `3000` | Only for `createServer`: port to listen on. |
@@ -113,6 +114,60 @@ createWebSocketServer(httpServer, {
   chat: { historyLimit: 200 },
 });
 ```
+
+### Access token and OAuth
+
+Clients can send an optional **access token** in the `join_room` message payload. If the server is configured with `auth`, it will decode (and optionally verify) the JWT and attach **name**, **email**, and **provider** to the connection. These appear in `PresenceEntry` and in chat messages so other clients can show who is in the room.
+
+**Supported providers:** Google, Microsoft, and custom OAuth (JWKS URL or decode-only).
+
+```ts
+import { createWebSocketServer } from "@openlivesync/server";
+
+// Decode only (no verification) — e.g. for dev or trusted tokens
+createWebSocketServer(httpServer, {
+  auth: {},
+});
+
+// Google: verify with Google JWKS; optional clientId to validate audience
+createWebSocketServer(httpServer, {
+  auth: { google: { clientId: "your-google-client-id.apps.googleusercontent.com" } },
+});
+
+// Microsoft: verify with tenant JWKS
+createWebSocketServer(httpServer, {
+  auth: { microsoft: { tenantId: "your-tenant-id", clientId: "your-client-id" } },
+});
+
+// Custom: JWKS URL or decode-only
+createWebSocketServer(httpServer, {
+  auth: {
+    custom: { jwksUrl: "https://your-issuer/.well-known/jwks.json", issuer: "https://your-issuer" },
+    // or decode-only (no verification): custom: { decodeOnly: true }
+  },
+});
+```
+
+#### Token once at connect (recommended)
+
+Use the access token **only once** when the client connects; the server then recognizes the connection for its lifetime and you do not send the token again in `join_room`.
+
+1. Use **`createTokenAuth(authOptions)`** as your `onAuth` function. It reads the token from the upgrade request (query param `access_token` or header `Authorization: Bearer <token>`), decodes it with `decodeAccessToken`, and returns `UserInfo`. The connection gets identity (userId, name, email, provider) at connect time.
+2. **Client**: Send the token only at connect (e.g. use `getAuthToken` in client config so the token is appended to the WebSocket URL as `?access_token=...`). Do **not** pass `accessToken` to `joinRoom` or `useRoom` when using this flow.
+3. If the connection already has identity (from `onAuth`), the server ignores any `accessToken` in `join_room` and does not overwrite it.
+
+Browser WebSocket cannot send custom headers, so in the browser the token is typically sent as a query param (`access_token`). The default `tokenFromRequest` in `createTokenAuth` supports both query and `Authorization` header (e.g. for Node clients or proxies).
+
+```ts
+import { createWebSocketServer, createTokenAuth } from "@openlivesync/server";
+
+const authOptions = { google: { clientId: "your-client-id.apps.googleusercontent.com" } };
+createWebSocketServer(httpServer, {
+  onAuth: createTokenAuth(authOptions),
+});
+```
+
+You can also use `decodeAccessToken(token, authOptions)` or `createTokenAuth(authOptions)` from the package. Exported types: `AuthOptions`, `DecodedToken`, `CreateTokenAuthOptions`, `AuthGoogleConfig`, `AuthMicrosoftConfig`, `AuthCustomConfig`.
 
 ## Chat storage
 
@@ -238,7 +293,7 @@ Clients connect over WebSocket and send/receive JSON messages with a `type` fiel
 
 | `type` | Purpose |
 |--------|--------|
-| `join_room` | Join a room. Payload: `{ roomId, presence? }`. |
+| `join_room` | Join a room. Payload: `{ roomId, presence?, accessToken? }`. If `accessToken` is sent and server has `auth` (or decode-only), the server decodes it and attaches name, email, provider to the connection; these appear in presence and chat. |
 | `leave_room` | Leave current room. Payload: `{ roomId? }` (optional). |
 | `update_presence` | Update presence. Payload: `{ presence }`. Throttled per connection. |
 | `broadcast_event` | Send collaboration event. Payload: `{ event, payload? }`. |
@@ -248,8 +303,8 @@ Clients connect over WebSocket and send/receive JSON messages with a `type` fiel
 
 | `type` | Purpose |
 |--------|--------|
-| `room_joined` | Sent after join. Payload: `{ roomId, connectionId, presence, chatHistory? }`. |
-| `presence_updated` | Broadcast. Payload: `{ roomId, joined?, left?, updated? }`. |
+| `room_joined` | Sent after join. Payload: `{ roomId, connectionId, presence, chatHistory? }`. Each entry in `presence` may include `userId`, `name`, `email`, `provider` when set from auth/token. |
+| `presence_updated` | Broadcast. Payload: `{ roomId, joined?, left?, updated? }`. `joined`/`updated` entries may include `name`, `email`, `provider`. |
 | `broadcast_event` | Relayed event. Payload: `{ roomId, connectionId, userId?, event, payload? }`. |
 | `chat_message` | Chat message. Payload: `{ roomId, connectionId, userId?, message, metadata? }`. |
 | `error` | Error. Payload: `{ code, message }`. |
@@ -263,6 +318,7 @@ Use the same message types and constants in your client; they are exported from 
 For building a compatible client or typing your app, the package exports:
 
 - **Server API**: `createServer`, `createWebSocketServer`, `createWebSocketHandler`, `ServerOptions`, `WebSocketServerOptions`, `ChatOptions`.
+- **Auth**: `decodeAccessToken`, `AuthOptions`, `DecodedToken`, `AuthGoogleConfig`, `AuthMicrosoftConfig`, `AuthCustomConfig`.
 - **Protocol types**: `Presence`, `UserInfo`, `ClientMessage`, `ServerMessage`, `JoinRoomPayload`, `RoomJoinedPayload`, `PresenceEntry`, `StoredChatMessage`, `ChatMessageInput`, etc.
 - **Message type constants**: `MSG_JOIN_ROOM`, `MSG_LEAVE_ROOM`, `MSG_UPDATE_PRESENCE`, `MSG_BROADCAST_EVENT`, `MSG_SEND_CHAT`, `MSG_ROOM_JOINED`, `MSG_PRESENCE_UPDATED`, `MSG_BROADCAST_EVENT_RELAY`, `MSG_CHAT_MESSAGE`, `MSG_ERROR`.
 - **Storage**: `ChatStorage`, `createInMemoryChatStorage`, `createPostgresChatStorage`, `createMySQLChatStorage`, `createSQLiteChatStorage`, and their option types.
