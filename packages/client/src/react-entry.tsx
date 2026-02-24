@@ -18,6 +18,7 @@ import {
   type LiveSyncClient,
   type LiveSyncClientConfig,
   type LiveSyncClientState,
+  type JoinRoomIdentity,
 } from "./client.js";
 import type { Presence, PresenceEntry, StoredChatMessage } from "./protocol.js";
 
@@ -112,10 +113,14 @@ export interface UseRoomOptions {
   accessToken?: string;
   /** Optional getter for access token (e.g. refreshed token); used when auto-joining. */
   getAccessToken?: () => string | Promise<string>;
+  /** Optional display name if not using accessToken. */
+  name?: string;
+  /** Optional email if not using accessToken. */
+  email?: string;
 }
 
 export interface UseRoomReturn {
-  join: (roomId: string, presence?: Presence, accessToken?: string) => void;
+  join: (roomId: string, presence?: Presence, identity?: JoinRoomIdentity) => void;
   leave: (roomId?: string) => void;
   updatePresence: (presence: Presence) => void;
   broadcastEvent: (event: string, payload?: unknown) => void;
@@ -133,18 +138,29 @@ export function useRoom(
   roomId: string | null,
   options: UseRoomOptions = {}
 ): UseRoomReturn {
-  const { initialPresence, autoJoin = true, accessToken, getAccessToken } = options;
+  const {
+    initialPresence,
+    autoJoin = true,
+    accessToken,
+    getAccessToken,
+    name,
+    email,
+  } = options;
   const client = useLiveSyncClient();
   const state = useClientState();
   const joinedRef = useRef<string | null>(null);
 
   const join = useCallback(
-    (id: string, presence?: Presence, token?: string) => {
-      const t = token ?? accessToken;
-      client.joinRoom(id, presence ?? initialPresence, t);
+    (id: string, presence?: Presence, identity?: JoinRoomIdentity) => {
+      const effectiveIdentity: JoinRoomIdentity = identity ?? {
+        accessToken,
+        name,
+        email,
+      };
+      client.joinRoom(id, presence ?? initialPresence, effectiveIdentity);
       joinedRef.current = id;
     },
-    [client, initialPresence, accessToken]
+    [client, initialPresence, accessToken, name, email]
   );
 
   const leave = useCallback(
@@ -161,7 +177,12 @@ export function useRoom(
     (async () => {
       const token = accessToken ?? (getAccessToken ? await getAccessToken() : undefined);
       if (!cancelled) {
-        client.joinRoom(roomId, initialPresence, token);
+        const identity: JoinRoomIdentity = {
+          accessToken: token,
+          name,
+          email,
+        };
+        client.joinRoom(roomId, initialPresence, identity);
         joinedRef.current = roomId;
       }
     })();

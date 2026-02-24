@@ -7,9 +7,26 @@ React app that demonstrates **@openlivesync/client** and **@openlivesync/client/
 - **LiveSyncProvider** — Wrap app with `url` and `reconnect`; provider creates the client and connects on mount.
 - **useConnectionStatus** — Connection status badge (connecting / open / closing / closed).
 - **useRoom** — Join/leave room, `initialPresence`, `autoJoin`, `updatePresence`, `broadcastEvent`.
-- **usePresence** — Presence map for the current room (list of who’s in the room with name/color).
+- **Identity (name/email or accessToken)** — The example passes `name`/`email` via `useRoom` options so they are shared with other participants; you could also pass an `accessToken` instead and let the server decode name/email from the token.
+- **usePresence** — Presence map for the current room (list of who’s in the room with name/color/email).
 - **useChat** — Chat messages and `sendMessage` for the room.
 - **useLiveSyncClient** — Access the client and `getState()` for debugging.
+
+### Identity in this example
+
+The example uses `useRoom(roomId, options)` with identity fields:
+
+```ts
+const { join, leave, ... } = useRoom(roomId, {
+  initialPresence: { color: "#0d6efd" },
+  autoJoin: true,
+  name,   // taken from local state and shared as presence/identity
+  email,  // optional; shown in the presence list
+  // accessToken?: string  // alternatively, pass a token here instead of name/email
+});
+```
+
+On the server, these values end up in `PresenceEntry` (`name`, `email`, `provider` when using a token), so other participants can see who is in the room.
 
 ## Prerequisites
 
@@ -48,3 +65,4 @@ Open http://localhost:5173. In development the app connects to `ws://localhost:5
 
 - **Development**: The app uses the current host (`/live`) so the Vite dev server can proxy WebSocket to the backend.
 - **Production**: Set `VITE_WS_URL` at build time (e.g. `wss://your-server/live`) or the app falls back to `ws://localhost:3000/live`.
+

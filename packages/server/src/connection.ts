@@ -116,7 +116,7 @@ export class Connection {
   private async dispatch(clientMsg: ClientMessage): Promise<void> {
     switch (clientMsg.type) {
       case MSG_JOIN_ROOM: {
-        const { roomId, presence, accessToken } = clientMsg.payload;
+        const { roomId, presence, accessToken, name, email } = clientMsg.payload;
         if (accessToken && this.userId === undefined) {
           const decoded = await decodeAccessToken(accessToken, this.auth);
           if (decoded) {
@@ -124,7 +124,15 @@ export class Connection {
             this.userName = decoded.name;
             this.userEmail = decoded.email;
             this.provider = decoded.provider;
+          } else if (name || email) {
+            // Fallback to provided name/email if token decoding fails.
+            if (name && this.userName === undefined) this.userName = name;
+            if (email && this.userEmail === undefined) this.userEmail = email;
           }
+        } else if (!accessToken && (name || email)) {
+          // No token: allow client-provided name/email.
+          if (name && this.userName === undefined) this.userName = name;
+          if (email && this.userEmail === undefined) this.userEmail = email;
         }
         if (this.currentRoomId) {
           const room = this.roomManager.get(this.currentRoomId);

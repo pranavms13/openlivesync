@@ -27,9 +27,10 @@ const client = createLiveSyncClient({
 });
 
 client.connect();
-client.joinRoom("room1", { name: "Alice", color: "#00f" });
-// Optional: pass access token so server can decode name/email (OAuth)
-// client.joinRoom("room1", { name: "Alice" }, accessToken);
+// Join with manual name/email (no token)
+client.joinRoom("room1", { color: "#00f" }, { name: "Alice", email: "alice@example.com" });
+// Or join with an access token so the server decodes name/email/provider (OAuth / OpenID)
+// client.joinRoom("room1", { color: "#00f" }, { accessToken });
 client.subscribe((state) => console.log(state.presence));
 
 client.updatePresence({ cursor: { x: 10, y: 20 } });
@@ -97,14 +98,23 @@ client.connect();
 ### Core (`@openlivesync/client`)
 
 - **`createLiveSyncClient(config)`** — Returns a client. Options: `url`, `reconnect?`, `reconnectIntervalMs?`, `maxReconnectIntervalMs?`, `getAuthToken?`, `presenceThrottleMs?`.
-- **Client methods**: `connect()`, `disconnect()`, `joinRoom(roomId, presence?, accessToken?)`, `leaveRoom(roomId?)`, `updatePresence(presence)`, `broadcastEvent(event, payload?)`, `sendChat(message, metadata?)`, `getState()`, `subscribe(listener)`. If you pass `accessToken`, the server (when configured with `auth`) decodes it and attaches name/email to your connection; other clients see them in presence. **Authenticate once at connect:** use only `getAuthToken` in config (token is sent in the URL at connect) and do **not** pass `accessToken` to `joinRoom` or `useRoom`; the server will recognize you for the connection lifetime.
+- **Client methods**: `connect()`, `disconnect()`, `joinRoom(roomId, presence?, identity?)`, `leaveRoom(roomId?)`, `updatePresence(presence)`, `broadcastEvent(event, payload?)`, `sendChat(message, metadata?)`, `getState()`, `subscribe(listener)`.
+  - **`identity`** is `{ accessToken?, name?, email? }`.
+    - If you pass an **`accessToken`**, the server (when configured with `auth`) decodes it and attaches `name`, `email`, and `provider` to your connection; other clients see them in presence.
+    - If you pass only **`name`/`email`** (no token), the server uses those values directly and shares them with other participants via `PresenceEntry`.
+    - If you pass both, the token takes priority (decoded claims win); if decoding fails, the server falls back to the provided `name`/`email`.
+  - **Authenticate once at connect (recommended):** use only `getAuthToken` in config (token is sent in the URL at connect) and do **not** pass `accessToken` to `joinRoom` or `useRoom`; the server will recognize you for the connection lifetime.
 
 ### React (`@openlivesync/client/react`)
 
 - **`LiveSyncProvider`** — Props: `client?` or `url?` (+ optional reconnect/auth/presence options). If `url` is provided, the provider creates the client and connects on mount.
 - **`useLiveSyncClient()`** — Returns the client from context.
 - **`useConnectionStatus()`** — Returns `"connecting" | "open" | "closing" | "closed"`.
-- **`useRoom(roomId, options?)`** — Returns `{ join, leave, updatePresence, broadcastEvent, presence, connectionId, isInRoom, currentRoomId }`. Options: `initialPresence?`, `autoJoin?`, `accessToken?`, `getAccessToken?`. With `autoJoin: true` (default), joins when `roomId` is set (using `accessToken` or `getAccessToken()` if provided) and leaves on unmount or when `roomId` changes. `join(roomId, presence?, accessToken?)` for manual join. For connect-only auth (token sent once at connect via provider's `getAuthToken`), omit `accessToken` and `getAccessToken` here.
+- **`useRoom(roomId, options?)`** — Returns `{ join, leave, updatePresence, broadcastEvent, presence, connectionId, isInRoom, currentRoomId }`.
+  - **Options**: `initialPresence?`, `autoJoin?`, `accessToken?`, `getAccessToken?`, `name?`, `email?`.
+    - With `autoJoin: true` (default), joins when `roomId` is set using an identity built from `{ accessToken (or getAccessToken()), name, email }` and leaves on unmount or when `roomId` changes.
+    - `join(roomId, presence?, identity?)` for manual join, where `identity` is `{ accessToken?, name?, email? }`.
+    - For connect-only auth (token sent once at connect via provider's `getAuthToken`), omit `accessToken`, `getAccessToken`, and `identity.accessToken` here and rely on the connection identity established at upgrade.
 - **`usePresence(roomId)`** — Returns the presence map for the current room.
 - **`useChat(roomId)`** — Returns `{ messages, sendMessage }`.
 

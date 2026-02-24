@@ -299,6 +299,45 @@ describe("Connection", () => {
     });
   });
 
+  it("join_room with manual name/email shares them in presence when no accessToken", async () => {
+    new Connection(mock.ws as import("ws").WebSocket, {
+      connectionId: "c1",
+      presenceThrottleMs: 0,
+      roomManager,
+    });
+    mock.emitMessage(
+      JSON.stringify({
+        type: MSG_JOIN_ROOM,
+        payload: {
+          roomId: "r1",
+          presence: {},
+          name: "Manual User",
+          email: "manual@example.com",
+        },
+      })
+    );
+    await vi.waitFor(() => {
+      expect(
+        mock.sent.some((m: { type?: string }) => m?.type === MSG_ROOM_JOINED)
+      ).toBe(true);
+    });
+    const roomJoined = mock.sent.find(
+      (m: { type?: string }) => m?.type === MSG_ROOM_JOINED
+    ) as {
+      payload?: {
+        presence?: Record<
+          string,
+          { userId?: string; name?: string; email?: string; provider?: string }
+        >;
+      };
+    };
+    const selfEntry = roomJoined?.payload?.presence?.["c1"];
+    expect(selfEntry?.userId).toBeUndefined();
+    expect(selfEntry?.name).toBe("Manual User");
+    expect(selfEntry?.email).toBe("manual@example.com");
+    expect(selfEntry?.provider).toBeUndefined();
+  });
+
   it("join_room with accessToken sets userId, name, email, provider from decoded token", async () => {
     const secret = new TextEncoder().encode("auth-secret");
     const token = await new SignJWT({

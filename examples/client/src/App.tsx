@@ -28,19 +28,22 @@ function ConnectionStatusBadge() {
 }
 
 function RoomControls({ roomId }: { roomId: string }) {
+  const [name, setName] = useState("Guest");
+  const [email, setEmail] = useState("");
+  const [broadcastPayload, setBroadcastPayload] = useState("");
   const roomOptions = useMemo(
     () => ({
-      initialPresence: { name: "Guest", color: "#0d6efd" },
+      initialPresence: { color: "#0d6efd" },
       autoJoin: true,
+      name,
+      email: email || undefined,
     }),
-    []
+    [name, email]
   );
   const { join, leave, isInRoom, connectionId, updatePresence, broadcastEvent } = useRoom(
     roomId,
     roomOptions
   );
-  const [name, setName] = useState("Guest");
-  const [broadcastPayload, setBroadcastPayload] = useState("");
 
   return (
     <section>
@@ -65,6 +68,16 @@ function RoomControls({ roomId }: { roomId: string }) {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 onBlur={() => updatePresence({ name, color: "#0d6efd" })}
+              />
+            </label>
+          </div>
+          <div className="form-row" style={{ marginTop: "0.5rem" }}>
+            <label>
+              Your email (shared via identity; optional):
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
               />
             </label>
           </div>

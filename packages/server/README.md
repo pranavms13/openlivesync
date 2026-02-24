@@ -115,9 +115,14 @@ createWebSocketServer(httpServer, {
 });
 ```
 
-### Access token and OAuth
+### Access token, identity, and OAuth
 
-Clients can send an optional **access token** in the `join_room` message payload. If the server is configured with `auth`, it will decode (and optionally verify) the JWT and attach **name**, **email**, and **provider** to the connection. These appear in `PresenceEntry` and in chat messages so other clients can show who is in the room.
+Clients can send identity in `join_room` in two ways:
+
+- **Access token** — An optional **access token** in the `join_room` payload (`accessToken`). If the server is configured with `auth`, it will decode (and optionally verify) the JWT and attach **name**, **email**, and **provider** to the connection.
+- **Manual fields** — Optional `name` and `email` fields in the `join_room` payload for cases where you don’t use tokens.
+
+In all cases, the resolved identity (from token or manual fields) appears in `PresenceEntry` and in chat messages so other clients can show who is in the room.
 
 **Supported providers:** Google, Microsoft, and custom OAuth (JWKS URL or decode-only).
 
@@ -154,7 +159,7 @@ Use the access token **only once** when the client connects; the server then rec
 
 1. Use **`createTokenAuth(authOptions)`** as your `onAuth` function. It reads the token from the upgrade request (query param `access_token` or header `Authorization: Bearer <token>`), decodes it with `decodeAccessToken`, and returns `UserInfo`. The connection gets identity (userId, name, email, provider) at connect time.
 2. **Client**: Send the token only at connect (e.g. use `getAuthToken` in client config so the token is appended to the WebSocket URL as `?access_token=...`). Do **not** pass `accessToken` to `joinRoom` or `useRoom` when using this flow.
-3. If the connection already has identity (from `onAuth`), the server ignores any `accessToken` in `join_room` and does not overwrite it.
+3. If the connection already has identity (from `onAuth`), the server ignores any `accessToken`/`name`/`email` in `join_room` and does not overwrite it.
 
 Browser WebSocket cannot send custom headers, so in the browser the token is typically sent as a query param (`access_token`). The default `tokenFromRequest` in `createTokenAuth` supports both query and `Authorization` header (e.g. for Node clients or proxies).
 
@@ -293,7 +298,7 @@ Clients connect over WebSocket and send/receive JSON messages with a `type` fiel
 
 | `type` | Purpose |
 |--------|--------|
-| `join_room` | Join a room. Payload: `{ roomId, presence?, accessToken? }`. If `accessToken` is sent and server has `auth` (or decode-only), the server decodes it and attaches name, email, provider to the connection; these appear in presence and chat. |
+| `join_room` | Join a room. Payload: `{ roomId, presence?, accessToken?, name?, email? }`. If `accessToken` is sent and server has `auth` (or decode-only), the server decodes it and attaches `name`, `email`, `provider` to the connection; these appear in presence and chat. If only `name`/`email` are provided (no token), the server uses those values directly. If both are provided, the decoded token claims take priority and manual `name`/`email` are used only as a fallback when decoding fails. |
 | `leave_room` | Leave current room. Payload: `{ roomId? }` (optional). |
 | `update_presence` | Update presence. Payload: `{ presence }`. Throttled per connection. |
 | `broadcast_event` | Send collaboration event. Payload: `{ event, payload? }`. |

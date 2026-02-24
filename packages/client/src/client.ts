@@ -9,6 +9,7 @@ import type {
   Presence,
   PresenceEntry,
   StoredChatMessage,
+  JoinRoomPayload,
 } from "./protocol.js";
 import {
   MSG_JOIN_ROOM,
@@ -32,6 +33,15 @@ export interface LiveSyncClientState {
   presence: Record<string, PresenceEntry>;
   chatMessages: StoredChatMessage[];
   lastError: { code: string; message: string } | null;
+}
+
+export interface JoinRoomIdentity {
+  /** Optional display name if not using accessToken. */
+  name?: string;
+  /** Optional email if not using accessToken. */
+  email?: string;
+  /** Optional OAuth/OpenID access token; server decodes to get name, email, provider. */
+  accessToken?: string;
 }
 
 export interface LiveSyncClientConfig {
@@ -68,7 +78,7 @@ function isServerMessage(msg: unknown): msg is ServerMessage {
 export interface LiveSyncClient {
   connect(): void;
   disconnect(): void;
-  joinRoom(roomId: string, presence?: Presence, accessToken?: string): void;
+  joinRoom(roomId: string, presence?: Presence, identity?: JoinRoomIdentity): void;
   leaveRoom(roomId?: string): void;
   updatePresence(presence: Presence): void;
   broadcastEvent(event: string, payload?: unknown): void;
@@ -97,6 +107,7 @@ export function createLiveSyncClient(config: LiveSyncClientConfig): LiveSyncClie
   let intentionalClose = false;
   let lastPresenceUpdate = 0;
   let pendingPresence: Presence | null = null;
+  let lastJoinIdentity: JoinRoomIdentity | null = null;
 
   const state: LiveSyncClientState = {
     connectionStatus: "closed",
@@ -231,7 +242,13 @@ export function createLiveSyncClient(config: LiveSyncClientConfig): LiveSyncClie
     const roomId = state.currentRoomId;
     if (!roomId) return;
     const presence = pendingPresence ?? (state.connectionId ? state.presence[state.connectionId]?.presence : undefined);
-    send({ type: MSG_JOIN_ROOM, payload: { roomId, presence } });
+    const identity = lastJoinIdentity;
+    const payload: JoinRoomPayload = { roomId };
+    if (presence !== undefined) payload.presence = presence;
+    if (identity?.accessToken !== undefined) payload.accessToken = identity.accessToken;
+    if (identity?.name !== undefined) payload.name = identity.name;
+    if (identity?.email !== undefined) payload.email = identity.email;
+    send({ type: MSG_JOIN_ROOM, payload });
   }
 
   function connect() {
@@ -307,7 +324,7 @@ export function createLiveSyncClient(config: LiveSyncClientConfig): LiveSyncClie
     setStatus("closed");
   }
 
-  function joinRoom(roomId: string, presence?: Presence, accessToken?: string) {
+  function joinRoom(roomId: string, presence?: Presence, identity?: JoinRoomIdentity) {
     if (state.currentRoomId) {
       send({ type: MSG_LEAVE_ROOM, payload: { roomId: state.currentRoomId } });
     }
@@ -315,9 +332,12 @@ export function createLiveSyncClient(config: LiveSyncClientConfig): LiveSyncClie
     state.presence = {};
     state.chatMessages = [];
     pendingPresence = presence ?? null;
-    const payload: { roomId: string; presence?: Presence; accessToken?: string } = { roomId };
+    lastJoinIdentity = identity ?? null;
+    const payload: JoinRoomPayload = { roomId };
     if (presence !== undefined) payload.presence = presence;
-    if (accessToken !== undefined) payload.accessToken = accessToken;
+    if (identity?.accessToken !== undefined) payload.accessToken = identity.accessToken;
+    if (identity?.name !== undefined) payload.name = identity.name;
+    if (identity?.email !== undefined) payload.email = identity.email;
     send({ type: MSG_JOIN_ROOM, payload });
     emit();
   }

@@ -28,6 +28,10 @@ export interface JoinRoomPayload {
   presence?: Presence;
   /** Optional OAuth/OpenID access token; server decodes to get name, email, provider. */
   accessToken?: string;
+  /** Optional display name if not using accessToken. */
+  name?: string;
+  /** Optional email if not using accessToken. */
+  email?: string;
 }
 
 export interface LeaveRoomPayload {
