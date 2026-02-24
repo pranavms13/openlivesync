@@ -1,26 +1,17 @@
 import { describe, it, expect } from "vitest";
 import React, { type ReactNode } from "react";
 import { renderHook, act } from "@testing-library/react";
-import {
-  LiveSyncProvider,
-  useRoom,
-} from "./react-entry.js";
+import { LiveSyncProvider, useRoom } from "./react-entry.js";
 import { createLiveSyncClient, type JoinRoomIdentity } from "./client.js";
-
-function Wrapper({ children }: { children: ReactNode }) {
-  const client = React.useMemo(
-    () => createLiveSyncClient({ url: "ws://localhost/live", reconnect: false }),
-    []
-  );
-  return <LiveSyncProvider client={client}>{children}</LiveSyncProvider>;
-}
 
 describe("useRoom identity options", () => {
   it("join uses identity from options when no explicit identity is passed", () => {
-    const joinSpy: { lastArgs?: [string, any, JoinRoomIdentity?] } = {};
+    const joinSpy: { lastArgs?: [string, unknown, JoinRoomIdentity?] } = {};
     const client = createLiveSyncClient({ url: "ws://localhost/live", reconnect: false });
     // Monkey-patch joinRoom to capture calls
-    (client as any).joinRoom = (...args: [string, any, JoinRoomIdentity?]) => {
+    (client as unknown as {
+      joinRoom: (...args: [string, unknown, JoinRoomIdentity?]) => void;
+    }).joinRoom = (...args: [string, unknown, JoinRoomIdentity?]) => {
       joinSpy.lastArgs = args;
     };
 
@@ -44,5 +35,5 @@ describe("useRoom identity options", () => {
       email: "hook@example.com",
     });
   });
-}
+});
 

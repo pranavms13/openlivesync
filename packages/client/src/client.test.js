@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { createLiveSyncClient } from "./client.js";
 
 function createMockWebSocket() {
@@ -143,5 +143,5 @@ describe("createLiveSyncClient joinRoom identity", () => {
       email: "reconnect@example.com",
     });
   });
-}
+});
 
