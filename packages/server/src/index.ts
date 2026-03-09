@@ -78,3 +78,8 @@ export type {
   SQLiteChatStorageOptions,
   SQLiteConnectionConfig,
 } from "./storage/sqlite.js";
+
+// Room adapter for multi-instance sync (e.g. Redis)
+export type { RoomAdapter } from "./adapters/adapter.js";
+export { createRedisAdapter } from "./adapters/redis.js";
+export type { RedisAdapterOptions } from "./adapters/redis.js";

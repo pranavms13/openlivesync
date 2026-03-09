@@ -4,10 +4,12 @@
 
 import { Room } from "./room.js";
 import type { ChatStorage } from "./storage/chat-storage.js";
+import type { RoomAdapter } from "./adapters/adapter.js";
 
 export interface RoomManagerOptions {
   chatStorage: ChatStorage;
   historyLimit: number;
+  adapter?: RoomAdapter;
 }
 
 export class RoomManager {
@@ -25,6 +27,7 @@ export class RoomManager {
         roomId,
         chatStorage: this.options.chatStorage,
         historyLimit: this.options.historyLimit,
+        adapter: this.options.adapter,
       });
       this.rooms.set(roomId, room);
     }

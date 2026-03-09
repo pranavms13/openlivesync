@@ -9,6 +9,7 @@ import { createInMemoryChatStorage } from "./storage/in-memory.js";
 import type { ChatStorage } from "./storage/chat-storage.js";
 import type { UserInfo } from "./protocol.js";
 import type { AuthOptions } from "./auth/index.js";
+import type { RoomAdapter } from "./adapters/adapter.js";
 import { RoomManager } from "./room-manager.js";
 import { Connection } from "./connection.js";
 
@@ -32,6 +33,8 @@ export interface WebSocketServerOptions {
   presenceThrottleMs?: number;
   /** Chat storage and history limit. If storage omitted, uses in-memory. */
   chat?: ChatOptions;
+  /** Optional room adapter for multi-instance sync (e.g. Redis Pub/Sub). */
+  adapter?: RoomAdapter;
 }
 
 export interface ServerOptions extends WebSocketServerOptions {
@@ -47,7 +50,11 @@ function createRoomManager(options: WebSocketServerOptions): RoomManager {
   const chat = options.chat ?? {};
   const storage = chat.storage ?? createInMemoryChatStorage({ historyLimit: chat.historyLimit ?? DEFAULT_HISTORY_LIMIT });
   const historyLimit = chat.historyLimit ?? DEFAULT_HISTORY_LIMIT;
-  return new RoomManager({ chatStorage: storage, historyLimit });
+  return new RoomManager({
+    chatStorage: storage,
+    historyLimit,
+    adapter: options.adapter,
+  });
 }
 
 function handleUpgrade(
