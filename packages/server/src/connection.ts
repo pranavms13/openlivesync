@@ -169,14 +169,14 @@ export class Connection {
         this.lastPresenceUpdate = now;
         if (!this.currentRoomId) return;
         const room = this.roomManager.get(this.currentRoomId);
-        if (room) room.updatePresence(this.connectionId, clientMsg.payload.presence as Presence);
+        if (room) await room.updatePresence(this.connectionId, clientMsg.payload.presence as Presence);
         break;
       }
       case MSG_BROADCAST_EVENT: {
         if (!this.currentRoomId) return;
         const room = this.roomManager.get(this.currentRoomId);
         if (room) {
-          room.broadcastEvent(
+          await room.broadcastEvent(
             this.connectionId,
             clientMsg.payload.event,
             clientMsg.payload.payload,

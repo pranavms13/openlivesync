@@ -15,6 +15,7 @@ import {
   MSG_BROADCAST_EVENT_RELAY,
 } from "./protocol.js";
 import type { ChatStorage } from "./storage/chat-storage.js";
+import type { RoomAdapter } from "./adapters/adapter.js";
 
 /** Handle the room uses to send messages to a connection. */
 export interface RoomConnectionHandle {
@@ -31,18 +32,21 @@ export interface RoomOptions {
   roomId: string;
   chatStorage: ChatStorage;
   historyLimit: number;
+  adapter?: RoomAdapter;
 }
 
 export class Room {
   private readonly roomId: string;
   private readonly chatStorage: ChatStorage;
   private readonly historyLimit: number;
+  private readonly adapter: RoomAdapter | undefined;
   private readonly connections = new Map<string, RoomConnectionHandle>();
 
   constructor(options: RoomOptions) {
     this.roomId = options.roomId;
     this.chatStorage = options.chatStorage;
     this.historyLimit = options.historyLimit;
+    this.adapter = options.adapter;
   }
 
   get connectionCount(): number {
@@ -60,16 +64,32 @@ export class Room {
     };
     this.connections.set(handle.connectionId, entry);
 
-    const presenceMap: Record<string, PresenceEntry> = {};
-    for (const [, c] of this.connections) {
-      presenceMap[c.connectionId] = {
-        connectionId: c.connectionId,
-        userId: c.userId,
-        name: c.name,
-        email: c.email,
-        provider: c.provider,
-        presence: c.presence,
-      };
+    let presenceMap: Record<string, PresenceEntry>;
+    if (this.adapter) {
+      await this.adapter.joinRoom(this.roomId, {
+        connectionId: handle.connectionId,
+        userId: handle.userId,
+        name: handle.name,
+        email: handle.email,
+        provider: handle.provider,
+        presence: entry.presence,
+      });
+      presenceMap = await this.adapter.getGlobalPresence(this.roomId);
+      if (this.connections.size === 1) {
+        await this.adapter.subscribe(this.roomId, (msg) => this.broadcast(msg));
+      }
+    } else {
+      presenceMap = {};
+      for (const [, c] of this.connections) {
+        presenceMap[c.connectionId] = {
+          connectionId: c.connectionId,
+          userId: c.userId,
+          name: c.name,
+          email: c.email,
+          provider: c.provider,
+          presence: c.presence,
+        };
+      }
     }
 
     let chatHistory: StoredChatMessage[] | undefined;
@@ -82,11 +102,14 @@ export class Room {
       chatHistory = [];
     }
 
+    const myConnectionId = this.adapter
+      ? `${this.adapter.instanceId}:${handle.connectionId}`
+      : handle.connectionId;
     handle.send({
       type: MSG_ROOM_JOINED,
       payload: {
         roomId: this.roomId,
-        connectionId: handle.connectionId,
+        connectionId: myConnectionId,
         presence: presenceMap,
         chatHistory,
       },
@@ -98,7 +121,7 @@ export class Room {
         roomId: this.roomId,
         joined: [
           {
-            connectionId: handle.connectionId,
+            connectionId: myConnectionId,
             userId: handle.userId,
             name: handle.name,
             email: handle.email,
@@ -112,56 +135,80 @@ export class Room {
 
   /** Remove connection and notify others. */
   leave(connectionId: string): void {
+    const leftId = this.adapter
+      ? `${this.adapter.instanceId}:${connectionId}`
+      : connectionId;
+    if (this.adapter) {
+      this.adapter.leaveRoom(this.roomId, connectionId).catch(() => {});
+    }
     this.connections.delete(connectionId);
     this.broadcast({
       type: MSG_PRESENCE_UPDATED,
       payload: {
         roomId: this.roomId,
-        left: [connectionId],
+        left: [leftId],
       },
     });
+    if (this.adapter && this.connections.size === 0) {
+      this.adapter.unsubscribe(this.roomId).catch(() => {});
+    }
   }
 
   /** Update presence for a connection and broadcast updated entry. */
-  updatePresence(connectionId: string, presence: Presence): void {
+  async updatePresence(connectionId: string, presence: Presence): Promise<void> {
     const conn = this.connections.get(connectionId);
     if (!conn) return;
     conn.presence = { ...presence };
+    const connectionIdForPayload = this.adapter
+      ? `${this.adapter.instanceId}:${conn.connectionId}`
+      : conn.connectionId;
+    const entry: PresenceEntry = {
+      connectionId: connectionIdForPayload,
+      userId: conn.userId,
+      name: conn.name,
+      email: conn.email,
+      provider: conn.provider,
+      presence: conn.presence,
+    };
+    if (this.adapter) {
+      await this.adapter.updatePresence(this.roomId, {
+        ...entry,
+        connectionId: conn.connectionId,
+      });
+    }
     this.broadcastExcept(connectionId, {
       type: MSG_PRESENCE_UPDATED,
       payload: {
         roomId: this.roomId,
-        updated: [
-          {
-            connectionId: conn.connectionId,
-            userId: conn.userId,
-            name: conn.name,
-            email: conn.email,
-            provider: conn.provider,
-            presence: conn.presence,
-          },
-        ],
+        updated: [entry],
       },
     });
   }
 
   /** Relay collaboration event to other clients in the room. */
-  broadcastEvent(
+  async broadcastEvent(
     connectionId: string,
     event: string,
     payload: unknown,
     userId?: string
-  ): void {
-    this.broadcastExcept(connectionId, {
+  ): Promise<void> {
+    const connectionIdForPayload = this.adapter
+      ? `${this.adapter.instanceId}:${connectionId}`
+      : connectionId;
+    const msg: ServerMessage = {
       type: MSG_BROADCAST_EVENT_RELAY,
       payload: {
         roomId: this.roomId,
-        connectionId,
+        connectionId: connectionIdForPayload,
         userId,
         event,
         payload,
       },
-    });
+    };
+    if (this.adapter) {
+      await this.adapter.publish(this.roomId, msg);
+    }
+    this.broadcastExcept(connectionId, msg);
   }
 
   /** Append chat message to storage and broadcast to all in room. */
@@ -178,17 +225,21 @@ export class Room {
       message,
       metadata,
     });
+    const connectionIdForPayload = this.adapter
+      ? `${this.adapter.instanceId}:${connectionId}`
+      : connectionId;
     const payload = {
       roomId: this.roomId,
-      connectionId,
+      connectionId: connectionIdForPayload,
       userId,
       message,
       metadata,
     };
-    this.broadcast({
-      type: MSG_CHAT_MESSAGE,
-      payload,
-    });
+    const msg: ServerMessage = { type: MSG_CHAT_MESSAGE, payload };
+    this.broadcast(msg);
+    if (this.adapter) {
+      await this.adapter.publish(this.roomId, msg);
+    }
   }
 
   private broadcast(msg: ServerMessage): void {

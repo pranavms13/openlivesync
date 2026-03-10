@@ -1,6 +1,6 @@
 {
   "name": "@openlivesync/server",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -31,7 +31,8 @@
   "peerDependencies": {
     "pg": "*",
     "mysql2": "*",
-    "better-sqlite3": "*"
+    "better-sqlite3": "*",
+    "ioredis": "*"
   },
   "peerDependenciesMeta": {
     "pg": {
@@ -41,6 +42,9 @@
       "optional": true
     },
     "better-sqlite3": {
+      "optional": true
+    },
+    "ioredis": {
       "optional": true
     }
   },
