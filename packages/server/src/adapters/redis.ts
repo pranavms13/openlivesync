@@ -16,6 +16,10 @@ export interface RedisClientLike {
   sadd(key: string, ...members: string[]): Promise<number>;
   srem(key: string, ...members: string[]): Promise<number>;
   smembers(key: string): Promise<string[]>;
+  zadd(key: string, score: number, member: string): Promise<number>;
+  zrem(key: string, ...members: string[]): Promise<number>;
+  zrange(key: string, min: number, max: number): Promise<string[]>;
+  zrangebyscore(key: string, min: number | string, max: number | string): Promise<string[]>;
   hset(key: string, object: Record<string, string>): Promise<number>;
   hgetall(key: string): Promise<Record<string, string>>;
   del(key: string): Promise<number>;
@@ -26,6 +30,9 @@ export interface RedisClientLike {
 export interface RedisPipelineLike {
   sadd(key: string, ...members: string[]): RedisPipelineLike;
   hset(key: string, object: Record<string, string>): RedisPipelineLike;
+  zadd(key: string, score: number, member: string): RedisPipelineLike;
+  zrem(key: string, ...members: string[]): RedisPipelineLike;
+  del(key: string): RedisPipelineLike;
   exec(): Promise<[Error | null, unknown][] | null>;
 }
 import { MSG_PRESENCE_UPDATED } from "../protocol.js";
@@ -59,6 +66,10 @@ export interface RedisAdapterOptions {
   subscriber?: RedisClientLike;
   /** Unique id for this server instance (default: random UUID). */
   instanceId?: string;
+  /** Interval in ms to refresh presence heartbeats (default: 5000). */
+  heartbeatIntervalMs?: number;
+  /** TTL in ms before presence entries are considered stale and removed (default: 15000). */
+  heartbeatTtlMs?: number;
 }
 
 interface Envelope {
@@ -69,18 +80,6 @@ interface Envelope {
 export async function createRedisAdapter(
   options: RedisAdapterOptions
 ): Promise<RoomAdapter> {
-  type RedisConstructor = new (url?: string) => RedisClientLike;
-  let RedisConstructor: RedisConstructor;
-  try {
-    const pkg = "ioredis";
-    const ioredis = await import(/* @vite-ignore */ pkg) as { default: RedisConstructor };
-    RedisConstructor = ioredis.default;
-  } catch {
-    throw new Error(
-      'Redis adapter requires the "ioredis" package. Install it with: npm install ioredis'
-    );
-  }
-
   const instanceId =
     options.instanceId ?? crypto.randomUUID?.() ?? `instance-${Date.now()}`;
 
@@ -91,6 +90,17 @@ export async function createRedisAdapter(
     client = options.client;
     subscriber = options.subscriber;
   } else if (options.url) {
+    type RedisConstructor = new (url?: string) => RedisClientLike;
+    let RedisConstructor: RedisConstructor;
+    try {
+      const pkg = "ioredis";
+      const ioredis = await import(/* @vite-ignore */ pkg) as { default: RedisConstructor };
+      RedisConstructor = ioredis.default;
+    } catch {
+      throw new Error(
+        'Redis adapter requires the "ioredis" package. Install it with: npm install ioredis'
+      );
+    }
     client = new RedisConstructor(options.url);
     subscriber = new RedisConstructor(options.url);
   } else {
@@ -98,6 +108,10 @@ export async function createRedisAdapter(
       "Redis adapter requires url or both client and subscriber options"
     );
   }
+
+  const heartbeatIntervalMs = options.heartbeatIntervalMs ?? 5000;
+  const heartbeatTtlMs = options.heartbeatTtlMs ?? 15000;
+  const localConnections = new Map<string, Set<string>>(); // roomId -> set of local connectionIds
 
   const subscriptions = new Map<string, (message: ServerMessage) => void>();
 
@@ -145,11 +159,18 @@ export async function createRedisAdapter(
     instanceId,
 
     async joinRoom(roomId: string, entry: PresenceEntry): Promise<void> {
+      let connections = localConnections.get(roomId);
+      if (!connections) {
+        connections = new Set();
+        localConnections.set(roomId, connections);
+      }
+      connections.add(entry.connectionId);
+
       const gid = gConnId(entry.connectionId);
       const key = presenceKey(roomId, gid);
       await client
         .multi()
-        .sadd(membersKey(roomId), gid)
+        .zadd(membersKey(roomId), Date.now(), gid)
         .hset(key, {
           userId: entry.userId ?? "",
           name: entry.name ?? "",
@@ -179,9 +200,15 @@ export async function createRedisAdapter(
     },
 
     async leaveRoom(roomId: string, connectionId: string): Promise<void> {
+      const connections = localConnections.get(roomId);
+      if (connections) {
+        connections.delete(connectionId);
+        if (connections.size === 0) localConnections.delete(roomId);
+      }
+
       const gid = gConnId(connectionId);
       const key = presenceKey(roomId, gid);
-      await client.srem(membersKey(roomId), gid);
+      await client.zrem(membersKey(roomId), gid);
       await client.del(key);
       await client.publish(
         channelName(roomId),
@@ -227,7 +254,7 @@ export async function createRedisAdapter(
     async getGlobalPresence(
       roomId: string
     ): Promise<Record<string, PresenceEntry>> {
-      const members = await client.smembers(membersKey(roomId));
+      const members = await client.zrange(membersKey(roomId), 0, -1);
       const result: Record<string, PresenceEntry> = {};
       for (const gid of members) {
         const key = presenceKey(roomId, gid);
@@ -267,9 +294,49 @@ export async function createRedisAdapter(
     },
 
     async close(): Promise<void> {
+      clearInterval(heartbeatTimer);
       await Promise.all([client.quit(), subscriber.quit()]);
     },
   };
+
+  const heartbeatTimer = setInterval(() => {
+    runHeartbeat().catch(() => {});
+  }, heartbeatIntervalMs);
+
+  async function runHeartbeat() {
+    const now = Date.now();
+    for (const [roomId, connections] of localConnections.entries()) {
+      if (connections.size === 0) continue;
+      const mKey = membersKey(roomId);
+
+      const pipe = client.multi();
+      for (const connId of connections) {
+        pipe.zadd(mKey, now, gConnId(connId));
+      }
+      await pipe.exec();
+
+      const expired = await client.zrangebyscore(mKey, "-inf", now - heartbeatTtlMs);
+      if (expired.length > 0) {
+        const cleanupPipe = client.multi();
+        cleanupPipe.zrem(mKey, ...expired);
+        for (const gid of expired) {
+          cleanupPipe.del(presenceKey(roomId, gid));
+        }
+        await cleanupPipe.exec();
+
+        await client.publish(
+          channelName(roomId),
+          JSON.stringify({
+            instanceId,
+            message: {
+              type: MSG_PRESENCE_UPDATED,
+              payload: { roomId, left: expired },
+            } as ServerMessage,
+          } as Envelope)
+        );
+      }
+    }
+  }
 
   return adapter;
 }

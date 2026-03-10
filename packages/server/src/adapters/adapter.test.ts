@@ -247,4 +247,64 @@ describe("createRedisAdapter", () => {
     const { createRedisAdapter } = await import("./redis.js");
     await expect(createRedisAdapter({})).rejects.toThrow(/Redis adapter requires/);
   });
+
+  it("runs heartbeat and cleans up stale entries", async () => {
+    const { createRedisAdapter } = await import("./redis.js");
+    const pub: { channel: string; message: string }[] = [];
+    const keys: Record<string, { score: number; member: string }[]> = {};
+    const mockClient = {
+      zadd: vi.fn(async (key: string, score: number, member: string) => { keys[key] = keys[key] || []; keys[key].push({ score, member }); return 1; }),
+      zrangebyscore: vi.fn(async () => ["inst1:c2"]),
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      zrem: vi.fn(async (_key: string, ..._members: string[]) => 1),
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      del: vi.fn(async (_key: string) => 1),
+      publish: vi.fn(async (channel: string, message: string) => { pub.push({ channel, message }); return 1; }),
+      multi: vi.fn(() => {
+        const p = {
+          sadd: () => p,
+          zadd: (key: string, score: number, member: string) => { mockClient.zadd(key, score, member); return p; },
+          zrem: (key: string, ...members: string[]) => { mockClient.zrem(key, ...members); return p; },
+          del: (key: string) => { mockClient.del(key); return p; },
+          hset: (key: string, object: Record<string, string>) => { mockClient.hset(key, object); return p; },
+          exec: () => mockClient.exec(),
+        };
+        return p;
+      }),
+      exec: vi.fn(async () => []),
+      quit: vi.fn(async () => "OK"),
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      hset: vi.fn(async (_key: string, _object: Record<string, string>) => 1),
+      on: vi.fn(),
+      subscribe: vi.fn(async () => {}),
+      unsubscribe: vi.fn(async () => {}),
+      sadd: vi.fn(async () => 1),
+      srem: vi.fn(async () => 1),
+      smembers: vi.fn(async () => []),
+      hgetall: vi.fn(async () => ({})),
+      zrange: vi.fn(async () => [])
+    };
+    const mockSubscriber = { ...mockClient };
+    const adapter = await createRedisAdapter({
+      client: mockClient as unknown as import("./redis.js").RedisClientLike,
+      subscriber: mockSubscriber as unknown as import("./redis.js").RedisClientLike,
+      heartbeatIntervalMs: 50,
+      heartbeatTtlMs: 100,
+    });
+
+    await adapter.joinRoom("r1", { connectionId: "c1", presence: {} });
+
+    // Wait for heartbeat
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    
+    expect(mockClient.zadd).toHaveBeenCalled();
+    expect(mockClient.zrangebyscore).toHaveBeenCalled();
+    expect(mockClient.zrem).toHaveBeenCalledWith("room:r1:members", "inst1:c2");
+    expect(mockClient.del).toHaveBeenCalledWith("room:r1:presence:inst1:c2");
+    expect(mockClient.publish).toHaveBeenCalled();
+    expect(pub[1].message).toContain("left");
+    expect(pub[1].message).toContain("inst1:c2");
+
+    await adapter.close!();
+  });
 });

@@ -46,6 +46,17 @@ function createMockWebSocket() {
   return { ws, sent, emitOpen, emitMessage };
 }
 
+function installMockWebSocket(mock: ReturnType<typeof createMockWebSocket>) {
+  const MockWS = vi.fn(() => mock.ws) as unknown as typeof WebSocket;
+  (MockWS as unknown as Record<string, number>).OPEN = 1;
+  (MockWS as unknown as Record<string, number>).CONNECTING = 0;
+  (MockWS as unknown as Record<string, number>).CLOSING = 2;
+  (MockWS as unknown as Record<string, number>).CLOSED = 3;
+  globalThis.WebSocket = MockWS;
+}
+
+const flushMicrotasks = () => new Promise<void>((r) => setTimeout(r, 0));
+
 describe("createLiveSyncClient joinRoom identity", () => {
   const OriginalWebSocket = globalThis.WebSocket;
 
@@ -54,12 +65,13 @@ describe("createLiveSyncClient joinRoom identity", () => {
     vi.restoreAllMocks();
   });
 
-  it("sends join_room with manual name/email when identity has no accessToken", () => {
+  it("sends join_room with manual name/email when identity has no accessToken", async () => {
     const mock = createMockWebSocket();
-    globalThis.WebSocket = vi.fn(() => mock.ws);
+    installMockWebSocket(mock);
 
     const client = createLiveSyncClient({ url: "ws://localhost/live", reconnect: false });
     client.connect();
+    await flushMicrotasks();
     mock.emitOpen();
 
     const presence = { cursor: { x: 1, y: 2 } };
@@ -80,12 +92,13 @@ describe("createLiveSyncClient joinRoom identity", () => {
     expect(msg.payload.accessToken).toBeUndefined();
   });
 
-  it("sends join_room with accessToken when identity has token only", () => {
+  it("sends join_room with accessToken when identity has token only", async () => {
     const mock = createMockWebSocket();
-    globalThis.WebSocket = vi.fn(() => mock.ws);
+    installMockWebSocket(mock);
 
     const client = createLiveSyncClient({ url: "ws://localhost/live", reconnect: false });
     client.connect();
+    await flushMicrotasks();
     mock.emitOpen();
 
     const identity = { accessToken: "token-123" };
@@ -101,12 +114,13 @@ describe("createLiveSyncClient joinRoom identity", () => {
     });
   });
 
-  it("reconnectAndRejoin reuses last identity", () => {
+  it("reconnectAndRejoin reuses last identity", async () => {
     const mock = createMockWebSocket();
-    globalThis.WebSocket = vi.fn(() => mock.ws);
+    installMockWebSocket(mock);
 
     const client = createLiveSyncClient({ url: "ws://localhost/live", reconnect: false });
     client.connect();
+    await flushMicrotasks();
     mock.emitOpen();
 
     const identity = {
@@ -117,7 +131,6 @@ describe("createLiveSyncClient joinRoom identity", () => {
 
     client.joinRoom("room-reconnect", { cursor: { x: 0 } }, identity);
 
-    // Simulate server confirming join so client state has currentRoomId set
     mock.emitMessage({
       type: "room_joined",
       payload: {
@@ -127,9 +140,11 @@ describe("createLiveSyncClient joinRoom identity", () => {
       },
     });
 
-    // Clear previous sends and trigger reconnectAndRejoin via connect() call again
+    // Simulate connection drop (not intentional disconnect, which clears room state)
+    mock.ws.close();
     mock.sent.length = 0;
     client.connect();
+    await flushMicrotasks();
     mock.emitOpen();
 
     const raw = mock.sent[mock.sent.length - 1];
