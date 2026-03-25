@@ -20,20 +20,26 @@
     "test:coverage": "vitest run --coverage"
   },
   "devDependencies": {
-    "@vitest/coverage-v8": "^4.0.0",
     "@types/ws": "^8.18.1",
+    "@vitest/coverage-v8": "^4.0.0",
+    "lib0": "^0.2.117",
     "typescript": "^5.6.3",
-    "vitest": "^4.0.0"
+    "vitest": "^4.0.0",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.30"
   },
   "dependencies": {
     "jose": "^5.9.6",
     "ws": "^8.19.0"
   },
   "peerDependencies": {
-    "pg": "*",
-    "mysql2": "*",
     "better-sqlite3": "*",
-    "ioredis": "*"
+    "ioredis": "*",
+    "mysql2": "*",
+    "pg": "*",
+    "yjs": "*",
+    "y-protocols": "*",
+    "lib0": "*"
   },
   "peerDependenciesMeta": {
     "pg": {
@@ -46,6 +52,15 @@
       "optional": true
     },
     "ioredis": {
+      "optional": true
+    },
+    "yjs": {
+      "optional": true
+    },
+    "y-protocols": {
+      "optional": true
+    },
+    "lib0": {
       "optional": true
     }
   },

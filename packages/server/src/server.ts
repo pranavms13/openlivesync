@@ -12,6 +12,8 @@ import type { AuthOptions } from "./auth/index.js";
 import type { RoomAdapter } from "./adapters/adapter.js";
 import { RoomManager } from "./room-manager.js";
 import { Connection } from "./connection.js";
+import type { YjsPersistence } from "./yjs/persistence.js";
+import { YjsDocStore } from "./yjs/doc-store.js";
 
 const DEFAULT_PATH = "/live";
 const DEFAULT_PRESENCE_THROTTLE_MS = 100;
@@ -20,6 +22,13 @@ const DEFAULT_HISTORY_LIMIT = 100;
 export interface ChatOptions {
   storage?: ChatStorage;
   historyLimit?: number;
+}
+
+export interface YjsOptions {
+  /** Custom persistence (loadDoc/storeUpdate). In-memory used if omitted. */
+  persistence?: YjsPersistence;
+  /** Y.Doc garbage collection (default true). */
+  gcEnabled?: boolean;
 }
 
 export interface WebSocketServerOptions {
@@ -35,6 +44,8 @@ export interface WebSocketServerOptions {
   chat?: ChatOptions;
   /** Optional room adapter for multi-instance sync (e.g. Redis Pub/Sub). */
   adapter?: RoomAdapter;
+  /** Enable Yjs CRDT document sync over binary WebSocket frames. */
+  yjs?: YjsOptions;
 }
 
 export interface ServerOptions extends WebSocketServerOptions {
@@ -50,10 +61,20 @@ function createRoomManager(options: WebSocketServerOptions): RoomManager {
   const chat = options.chat ?? {};
   const storage = chat.storage ?? createInMemoryChatStorage({ historyLimit: chat.historyLimit ?? DEFAULT_HISTORY_LIMIT });
   const historyLimit = chat.historyLimit ?? DEFAULT_HISTORY_LIMIT;
+
+  let yjsDocStore: YjsDocStore | undefined;
+  if (options.yjs) {
+    yjsDocStore = new YjsDocStore({
+      persistence: options.yjs.persistence,
+      gcEnabled: options.yjs.gcEnabled,
+    });
+  }
+
   return new RoomManager({
     chatStorage: storage,
     historyLimit,
     adapter: options.adapter,
+    yjsDocStore,
   });
 }
 
@@ -86,6 +107,7 @@ function handleUpgrade(
         presenceThrottleMs,
         roomManager,
         auth: options.auth,
+        yjsEnabled: !!options.yjs,
       });
     };
 

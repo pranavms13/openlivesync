@@ -11,6 +11,7 @@ export {
   type ServerOptions,
   type WebSocketServerOptions,
   type ChatOptions,
+  type YjsOptions,
 } from "./server.js";
 
 // Protocol (for client compatibility and typing)
@@ -83,3 +84,8 @@ export type {
 export type { RoomAdapter } from "./adapters/adapter.js";
 export { createRedisAdapter } from "./adapters/redis.js";
 export type { RedisAdapterOptions } from "./adapters/redis.js";
+
+// Yjs CRDT integration
+export type { YjsPersistence } from "./yjs/persistence.js";
+export { createInMemoryYjsPersistence } from "./yjs/persistence.js";
+export { YjsDocStore, type YjsDocStoreOptions } from "./yjs/doc-store.js";

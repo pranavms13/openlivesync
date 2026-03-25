@@ -1,0 +1,249 @@
+:root {
+  font-family: system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+  color: #1a1a1a;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+/* Header */
+.header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: #fff;
+  border-bottom: 1px solid #e0e0e0;
+  z-index: 10;
+  flex-shrink: 0;
+}
+
+.header h1 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-right: auto;
+}
+
+.header button {
+  padding: 0.35em 0.75em;
+  border: 1px solid #0d6efd;
+  border-radius: 4px;
+  background: #0d6efd;
+  color: #fff;
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.header button:hover {
+  background: #0b5ed7;
+}
+
+.header button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Connection badge */
+.badge {
+  display: inline-block;
+  padding: 0.15em 0.5em;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.badge.open {
+  background: #d4edda;
+  color: #155724;
+}
+.badge.connecting {
+  background: #fff3cd;
+  color: #856404;
+}
+.badge.closed {
+  background: #f8d7da;
+  color: #721c24;
+}
+.badge.closing {
+  background: #e2e3e5;
+  color: #383d41;
+}
+
+/* Canvas area */
+.canvas {
+  flex: 1;
+  position: relative;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #888;
+  font-size: 0.95rem;
+}
+
+/* Custom node */
+.color-node {
+  padding: 10px 16px;
+  border-radius: 8px;
+  border-style: solid;
+  min-width: 100px;
+  text-align: center;
+  font-size: 0.85rem;
+}
+
+.color-node-label {
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.color-node-hex {
+  font-size: 0.7rem;
+  color: #666;
+  font-family: monospace;
+}
+
+/* Node config panel */
+.config-panel {
+  width: 250px;
+  background: #fff;
+  border-left: 1px solid #e0e0e0;
+  padding: 1rem;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+.config-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.config-header h3 {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.25rem;
+  cursor: pointer;
+  color: #666;
+  padding: 0 4px;
+}
+
+.close-btn:hover {
+  color: #333;
+}
+
+.config-field {
+  margin-bottom: 1rem;
+}
+
+.config-field label {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #555;
+  margin-bottom: 0.25rem;
+}
+
+.config-value {
+  font-size: 0.85rem;
+  word-break: break-all;
+}
+
+.color-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.color-row input[type="color"] {
+  width: 36px;
+  height: 36px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  padding: 2px;
+  cursor: pointer;
+}
+
+.color-row input[type="text"] {
+  flex: 1;
+  padding: 0.3em 0.5em;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 0.85rem;
+  font-family: monospace;
+}
+
+/* Remote cursors */
+.cursors-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 1000;
+  overflow: hidden;
+}
+
+.remote-cursor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  transition: transform 80ms linear;
+  will-change: transform;
+}
+
+.debug-panel {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  font-size: 0.7rem;
+  font-family: monospace;
+  padding: 4px 8px;
+  border-radius: 4px;
+  z-index: 999;
+  pointer-events: none;
+}
+
+.remote-cursor-label {
+  display: inline-block;
+  margin-left: 14px;
+  margin-top: -4px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: #fff;
+  white-space: nowrap;
+}

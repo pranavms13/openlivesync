@@ -1,7 +1,10 @@
 import { describe, it, expect } from "vitest";
+import * as encoding from "lib0/encoding";
 import { Room } from "./room.js";
 import { RoomManager } from "./room-manager.js";
 import { createInMemoryChatStorage } from "./storage/in-memory.js";
+import { YjsDocStore } from "./yjs/doc-store.js";
+import { createAwarenessRemovalMessage } from "./yjs/handler.js";
 import { MSG_ROOM_JOINED, MSG_PRESENCE_UPDATED, MSG_CHAT_MESSAGE, MSG_BROADCAST_EVENT_RELAY } from "./protocol.js";
 
 function mockHandle(
@@ -19,6 +22,18 @@ function mockHandle(
     },
     sent: list,
   };
+}
+
+function createAwarenessUpdateMessage(clientId: number, clock: number, stateJson: string): Uint8Array {
+  const encoder = encoding.createEncoder();
+  encoding.writeVarUint(encoder, 1); // MSG_AWARENESS
+  const content = encoding.createEncoder();
+  encoding.writeVarUint(content, 1); // count
+  encoding.writeVarUint(content, clientId);
+  encoding.writeVarUint(content, clock);
+  encoding.writeVarString(content, stateJson);
+  encoding.writeVarUint8Array(encoder, encoding.toUint8Array(content));
+  return encoding.toUint8Array(encoder);
 }
 
 describe("Room", () => {
@@ -144,6 +159,42 @@ describe("Room", () => {
     const history = await storage.getHistory("r1");
     expect(history).toHaveLength(1);
     expect(history[0].message).toBe("hello");
+  });
+
+  it("cleans up tracked awareness states and broadcasts removals on leave", async () => {
+    const storage = createInMemoryChatStorage();
+    const yjsDocStore = new YjsDocStore();
+    const room = new Room({
+      roomId: "r1",
+      chatStorage: storage,
+      historyLimit: 10,
+      yjsDocStore,
+    });
+
+    const sentBinary1: Uint8Array[] = [];
+    const sentBinary2: Uint8Array[] = [];
+    const { handle: h1 } = mockHandle("c1");
+    const { handle: h2 } = mockHandle("c2");
+    h1.sendBinary = (data) => sentBinary1.push(data);
+    h2.sendBinary = (data) => sentBinary2.push(data);
+
+    await room.join(h1);
+    await room.join(h2);
+
+    const awarenessMsg = createAwarenessUpdateMessage(42, 1, "{\"name\":\"alice\"}");
+    room.handleYjsMessage("c1", awarenessMsg);
+    await Promise.resolve();
+
+    expect(yjsDocStore.getAwareness("r1").has(42)).toBe(true);
+
+    sentBinary1.length = 0;
+    sentBinary2.length = 0;
+
+    room.leave("c1");
+
+    expect(yjsDocStore.getAwareness("r1").has(42)).toBe(false);
+    expect(sentBinary1).toHaveLength(0);
+    expect(sentBinary2).toEqual([createAwarenessRemovalMessage([42])]);
   });
 });
 

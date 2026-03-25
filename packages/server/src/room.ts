@@ -16,6 +16,8 @@ import {
 } from "./protocol.js";
 import type { ChatStorage } from "./storage/chat-storage.js";
 import type { RoomAdapter } from "./adapters/adapter.js";
+import type { YjsDocStore } from "./yjs/doc-store.js";
+import { handleYjsBinaryMessage, createSyncStep1Message, createAwarenessRemovalMessage } from "./yjs/handler.js";
 
 /** Handle the room uses to send messages to a connection. */
 export interface RoomConnectionHandle {
@@ -26,6 +28,7 @@ export interface RoomConnectionHandle {
   provider?: string;
   presence: Presence;
   send(msg: ServerMessage): void;
+  sendBinary?(data: Uint8Array): void;
 }
 
 export interface RoomOptions {
@@ -33,6 +36,7 @@ export interface RoomOptions {
   chatStorage: ChatStorage;
   historyLimit: number;
   adapter?: RoomAdapter;
+  yjsDocStore?: YjsDocStore;
 }
 
 export class Room {
@@ -40,13 +44,17 @@ export class Room {
   private readonly chatStorage: ChatStorage;
   private readonly historyLimit: number;
   private readonly adapter: RoomAdapter | undefined;
+  private readonly yjsDocStore: YjsDocStore | undefined;
   private readonly connections = new Map<string, RoomConnectionHandle>();
+  /** Tracks Yjs client IDs per connection for awareness cleanup on leave. */
+  private readonly yjsClientIds = new Map<string, Set<number>>();
 
   constructor(options: RoomOptions) {
     this.roomId = options.roomId;
     this.chatStorage = options.chatStorage;
     this.historyLimit = options.historyLimit;
     this.adapter = options.adapter;
+    this.yjsDocStore = options.yjsDocStore;
   }
 
   get connectionCount(): number {
@@ -131,6 +139,13 @@ export class Room {
         ],
       },
     });
+
+    // Yjs: send sync step 1 to new client to initiate handshake
+    if (this.yjsDocStore && handle.sendBinary) {
+      createSyncStep1Message(this.roomId, this.yjsDocStore)
+        .then((msg) => handle.sendBinary!(msg))
+        .catch(() => {});
+    }
   }
 
   /** Remove connection and notify others. */
@@ -141,6 +156,19 @@ export class Room {
     if (this.adapter) {
       this.adapter.leaveRoom(this.roomId, connectionId).catch(() => {});
     }
+
+    // Yjs: clean up awareness state for this connection
+    if (this.yjsDocStore) {
+      const clientIds = this.yjsClientIds.get(connectionId);
+      if (clientIds && clientIds.size > 0) {
+        const ids = Array.from(clientIds);
+        this.yjsDocStore.removeAwarenessStates(this.roomId, ids);
+        const removalMsg = createAwarenessRemovalMessage(ids);
+        this.broadcastBinaryExcept(connectionId, removalMsg);
+      }
+      this.yjsClientIds.delete(connectionId);
+    }
+
     this.connections.delete(connectionId);
     this.broadcast({
       type: MSG_PRESENCE_UPDATED,
@@ -151,6 +179,10 @@ export class Room {
     });
     if (this.adapter && this.connections.size === 0) {
       this.adapter.unsubscribe(this.roomId).catch(() => {});
+    }
+    // Yjs: destroy doc when room empties
+    if (this.yjsDocStore && this.connections.size === 0) {
+      this.yjsDocStore.destroyDoc(this.roomId);
     }
   }
 
@@ -239,6 +271,56 @@ export class Room {
     this.broadcast(msg);
     if (this.adapter) {
       await this.adapter.publish(this.roomId, msg);
+    }
+  }
+
+  /** Handle an incoming Yjs binary message from a connection. */
+  handleYjsMessage(connectionId: string, data: Uint8Array): void {
+    if (!this.yjsDocStore) return;
+    handleYjsBinaryMessage(this.roomId, connectionId, data, this.yjsDocStore)
+      .then((result) => {
+        if (
+          result.awarenessClientIdsAdded.length > 0 ||
+          result.awarenessClientIdsRemoved.length > 0
+        ) {
+          const trackedClientIds = this.yjsClientIds.get(connectionId) ?? new Set<number>();
+          for (const clientId of result.awarenessClientIdsAdded) {
+            trackedClientIds.add(clientId);
+          }
+          for (const clientId of result.awarenessClientIdsRemoved) {
+            trackedClientIds.delete(clientId);
+          }
+          if (trackedClientIds.size > 0) {
+            this.yjsClientIds.set(connectionId, trackedClientIds);
+          } else {
+            this.yjsClientIds.delete(connectionId);
+          }
+        }
+        const conn = this.connections.get(connectionId);
+        if (conn?.sendBinary) {
+          for (const msg of result.reply) {
+            conn.sendBinary(msg);
+          }
+        }
+        for (const msg of result.broadcast) {
+          this.broadcastBinaryExcept(connectionId, msg);
+        }
+      })
+      .catch(() => {});
+  }
+
+  /** Send binary data to a specific connection. */
+  sendBinary(connectionId: string, data: Uint8Array): void {
+    const conn = this.connections.get(connectionId);
+    if (conn?.sendBinary) conn.sendBinary(data);
+  }
+
+  /** Broadcast binary data to all connections except one. */
+  broadcastBinaryExcept(exceptConnectionId: string, data: Uint8Array): void {
+    for (const conn of this.connections.values()) {
+      if (conn.connectionId !== exceptConnectionId && conn.sendBinary) {
+        conn.sendBinary(data);
+      }
     }
   }
 

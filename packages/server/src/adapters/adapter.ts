@@ -51,6 +51,18 @@ export interface RoomAdapter {
    */
   unsubscribe(roomId: string): Promise<void>;
 
+  /**
+   * Publish binary data (Yjs updates) to the room so other instances can relay to their clients.
+   * Optional: only needed when Yjs is enabled in a multi-instance setup.
+   */
+  publishBinary?(roomId: string, data: Uint8Array): Promise<void>;
+
+  /**
+   * Subscribe to binary data for the room from other instances.
+   * Optional: only needed when Yjs is enabled in a multi-instance setup.
+   */
+  subscribeBinary?(roomId: string, handler: (data: Uint8Array) => void): Promise<void>;
+
   /** Optional: close connections and release resources. */
   close?(): Promise<void>;
 }

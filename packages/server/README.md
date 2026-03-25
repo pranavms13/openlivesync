@@ -7,6 +7,7 @@ Node.js server package for OpenLiveSync. Provides WebSocket-based presence, live
 - **Presence** — Track who’s in a room and arbitrary presence state (e.g. cursor, name, color). Join/leave and updates are broadcast to the room.
 - **Broadcast** — Send collaboration events to all other clients in the same room.
 - **Chat** — Room-based messages with optional persistence (in-memory, Postgres, MySQL, or SQLite).
+- **Yjs CRDT sync** — Optional conflict-free document synchronization via [Yjs](https://yjs.dev/). Binary Yjs protocol messages are multiplexed alongside the existing JSON protocol over the same WebSocket connection. Fully backward-compatible — clients that don’t use Yjs are unaffected.
 
 ## Installation
 
@@ -93,6 +94,7 @@ Returns a function `(request, socket, head) => void` that you pass to `server.on
 | `auth` | `AuthOptions` | — | Optional: decode/verify access tokens sent in `join_room`. Supports Google, Microsoft, and custom OAuth (see [Access token and OAuth](#access-token-and-oauth)). When tokens are decoded, `name`, `email`, and `provider` appear in presence and chat. |
 | `presenceThrottleMs` | `number` | `100` | Minimum ms between presence updates per connection. |
 | `chat` | `{ storage?, historyLimit? }` | — | Chat config. Omit `storage` to use in-memory. `historyLimit` is how many messages to send to new joiners (default `100`). |
+| `yjs` | `YjsOptions` | — | Enable Yjs CRDT sync over binary WebSocket frames. Configure persistence and Y.Doc GC. |
 | `port` | `number` | `3000` | Only for `createServer`: port to listen on. |
 
 **Example with auth and custom path:**
@@ -289,6 +291,69 @@ const myStorage: ChatStorage = {
   },
 };
 ```
+
+## Yjs CRDT sync (optional)
+
+Enable Yjs document synchronization over the same WebSocket connection by passing `yjs` in server options. Clients can then use `@openlivesync/client/yjs` (or any compatible Yjs sync implementation) to sync a `Y.Doc` for each room.
+
+### Install (peer deps)
+
+If you use Yjs features, install Yjs dependencies in your server app:
+
+```bash
+npm install yjs y-protocols lib0
+```
+
+### Enable Yjs
+
+```ts
+import http from "node:http";
+import { createWebSocketServer } from "@openlivesync/server";
+
+const httpServer = http.createServer();
+
+createWebSocketServer(httpServer, {
+  path: "/live",
+  yjs: {}, // enable Yjs binary handling
+});
+
+httpServer.listen(3000);
+```
+
+### Persistence (optional)
+
+By default, when `yjs` is enabled without a persistence adapter:
+
+- The server keeps one `Y.Doc` per room **in memory**.
+- The doc is destroyed when the room becomes empty.
+- State is not retained across server restarts.
+
+To persist Yjs updates, provide a `YjsPersistence` implementation via `yjs.persistence`:
+
+```ts
+import http from "node:http";
+import {
+  createWebSocketServer,
+  createInMemoryYjsPersistence,
+  type YjsPersistence,
+} from "@openlivesync/server";
+
+const httpServer = http.createServer();
+
+createWebSocketServer(httpServer, {
+  yjs: {
+    // Example persistence; replace with your DB-backed implementation
+    persistence: createInMemoryYjsPersistence(),
+    gcEnabled: true,
+  },
+});
+```
+
+`YjsPersistence`:
+
+- **`loadDoc(roomId)`** → Return a previously saved Yjs update/state (or `null`).
+- **`storeUpdate(roomId, update)`** → Persist incremental updates.
+- **`clearDoc(roomId)`** → Optional cleanup (e.g. delete state).
 
 ## Wire protocol
 
