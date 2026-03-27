@@ -42,6 +42,17 @@ export async function handleYjsBinaryMessage(
   const messageType = decoding.readVarUint(decoder);
 
   if (messageType === MSG_SYNC) {
+    // Peek ahead: if this is a sync update (type 2) and persistence is enabled,
+    // extract the raw update bytes now before readSyncMessage advances the decoder.
+    let updateForPersistence: Uint8Array | null = null;
+    if (docStore.persistence) {
+      const peekDecoder = decoding.createDecoder(data);
+      decoding.readVarUint(peekDecoder); // skip MSG_SYNC
+      if (decoding.readVarUint(peekDecoder) === 2) {
+        updateForPersistence = decoding.readVarUint8Array(peekDecoder);
+      }
+    }
+
     const doc = await docStore.getOrCreateDoc(roomId);
     const encoder = encoding.createEncoder();
     encoding.writeVarUint(encoder, MSG_SYNC);
@@ -58,13 +69,8 @@ export async function handleYjsBinaryMessage(
       // Re-broadcast the original message to other clients.
       result.broadcast.push(data);
 
-      // Persist only (don't re-apply — readSyncMessage already applied it)
-      if (docStore.persistence) {
-        const updateDecoder = decoding.createDecoder(data);
-        decoding.readVarUint(updateDecoder); // skip message type (0 = sync)
-        decoding.readVarUint(updateDecoder); // skip sync message type (2 = update)
-        const update = decoding.readVarUint8Array(updateDecoder);
-        await docStore.persistence.storeUpdate(roomId, update);
+      if (updateForPersistence) {
+        await docStore.persistence!.storeUpdate(roomId, updateForPersistence);
       }
     }
   } else if (messageType === MSG_AWARENESS) {

@@ -293,6 +293,10 @@ export async function createRedisAdapter(
       await subscriber.unsubscribe(ch);
     },
 
+    // TODO: implement publishBinary / subscribeBinary for Yjs binary relay across instances.
+    // Until these are added, Yjs CRDT sync will only work within a single server instance
+    // when the Redis adapter is in use. See RoomAdapter interface for the required signatures.
+
     async close(): Promise<void> {
       clearInterval(heartbeatTimer);
       await Promise.all([client.quit(), subscriber.quit()]);

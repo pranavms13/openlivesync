@@ -17,7 +17,7 @@ import {
 import type { ChatStorage } from "./storage/chat-storage.js";
 import type { RoomAdapter } from "./adapters/adapter.js";
 import type { YjsDocStore } from "./yjs/doc-store.js";
-import { handleYjsBinaryMessage, createSyncStep1Message, createAwarenessRemovalMessage } from "./yjs/handler.js";
+import { handleYjsBinaryMessage, createSyncStep1Message, createAwarenessRemovalMessage, type YjsHandlerResult } from "./yjs/handler.js";
 
 /** Handle the room uses to send messages to a connection. */
 export interface RoomConnectionHandle {
@@ -144,7 +144,7 @@ export class Room {
     if (this.yjsDocStore && handle.sendBinary) {
       createSyncStep1Message(this.roomId, this.yjsDocStore)
         .then((msg) => handle.sendBinary!(msg))
-        .catch(() => {});
+        .catch((err) => console.error(`[openlivesync] Yjs sync step 1 failed for room "${this.roomId}":`, err));
     }
   }
 
@@ -278,7 +278,7 @@ export class Room {
   handleYjsMessage(connectionId: string, data: Uint8Array): void {
     if (!this.yjsDocStore) return;
     handleYjsBinaryMessage(this.roomId, connectionId, data, this.yjsDocStore)
-      .then((result) => {
+      .then((result: YjsHandlerResult) => {
         if (
           result.awarenessClientIdsAdded.length > 0 ||
           result.awarenessClientIdsRemoved.length > 0
@@ -306,7 +306,7 @@ export class Room {
           this.broadcastBinaryExcept(connectionId, msg);
         }
       })
-      .catch(() => {});
+      .catch((err) => console.error(`[openlivesync] Yjs message handling failed for room "${this.roomId}":`, err));
   }
 
   /** Send binary data to a specific connection. */

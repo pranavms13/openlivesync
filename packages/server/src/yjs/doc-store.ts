@@ -30,21 +30,17 @@ export class YjsDocStore {
     this.docs.set(roomId, doc);
 
     if (this.persistence) {
-      const saved = await this.persistence.loadDoc(roomId);
-      if (saved) {
-        Y.applyUpdate(doc, saved);
+      try {
+        const saved = await this.persistence.loadDoc(roomId);
+        if (saved) {
+          Y.applyUpdate(doc, saved);
+        }
+      } catch (err) {
+        console.error(`[openlivesync] Failed to load persisted Yjs doc for room "${roomId}":`, err);
       }
     }
 
     return doc;
-  }
-
-  async applyUpdate(roomId: string, update: Uint8Array): Promise<void> {
-    const doc = await this.getOrCreateDoc(roomId);
-    Y.applyUpdate(doc, update);
-    if (this.persistence) {
-      await this.persistence.storeUpdate(roomId, update);
-    }
   }
 
   async getStateVector(roomId: string): Promise<Uint8Array> {

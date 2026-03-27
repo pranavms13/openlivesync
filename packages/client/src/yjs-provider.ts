@@ -151,7 +151,9 @@ export class LiveSyncYjsProvider extends Observable<string> {
           this.client.sendBinary(encoding.toUint8Array(encoder));
         }
 
-        if (syncMessageType === 0 || syncMessageType === 1 || syncMessageType === 2) {
+        // Emit "synced" only after receiving server state (step 2) or a remote update,
+        // not when we've merely responded to the server's sync step 1 request (type 0).
+        if (syncMessageType === 1 || syncMessageType === 2) {
           this.emit("synced", [true]);
         }
       } else if (messageType === MSG_AWARENESS) {
