@@ -83,6 +83,8 @@ export interface LiveSyncClient {
   updatePresence(presence: Presence): void;
   broadcastEvent(event: string, payload?: unknown): void;
   sendChat(message: string, metadata?: Record<string, unknown>): void;
+  sendBinary(data: Uint8Array): void;
+  subscribeBinary(listener: (data: Uint8Array) => void): () => void;
   getConnectionStatus(): ConnectionStatus;
   getPresence(): Record<string, PresenceEntry>;
   getChatMessages(): StoredChatMessage[];
@@ -119,6 +121,7 @@ export function createLiveSyncClient(config: LiveSyncClientConfig): LiveSyncClie
   };
 
   const listeners = new Set<(s: LiveSyncClientState) => void>();
+  const binaryListeners = new Set<(data: Uint8Array) => void>();
 
   function emit() {
     const snapshot: LiveSyncClientState = {
@@ -279,6 +282,7 @@ export function createLiveSyncClient(config: LiveSyncClientConfig): LiveSyncClie
       }
 
       ws = new WebSocket(url);
+      ws.binaryType = "arraybuffer";
 
       ws.onopen = () => {
         setStatus("open");
@@ -287,6 +291,18 @@ export function createLiveSyncClient(config: LiveSyncClientConfig): LiveSyncClie
       };
 
       ws.onmessage = (event) => {
+        if (event.data instanceof ArrayBuffer) {
+          const binary = new Uint8Array(event.data);
+          binaryListeners.forEach((cb) => cb(binary));
+          return;
+        }
+        if (event.data instanceof Blob) {
+          event.data.arrayBuffer().then((buf) => {
+            const binary = new Uint8Array(buf);
+            binaryListeners.forEach((cb) => cb(binary));
+          });
+          return;
+        }
         const data = typeof event.data === "string" ? event.data : event.data.toString();
         handleMessage(data);
       };
@@ -378,6 +394,16 @@ export function createLiveSyncClient(config: LiveSyncClientConfig): LiveSyncClie
     return () => listeners.delete(listener);
   }
 
+  function sendBinary(data: Uint8Array) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(data);
+  }
+
+  function subscribeBinary(listener: (data: Uint8Array) => void): () => void {
+    binaryListeners.add(listener);
+    return () => binaryListeners.delete(listener);
+  }
+
   return {
     connect,
     disconnect,
@@ -386,6 +412,8 @@ export function createLiveSyncClient(config: LiveSyncClientConfig): LiveSyncClie
     updatePresence,
     broadcastEvent,
     sendChat,
+    sendBinary,
+    subscribeBinary,
     getConnectionStatus: () => state.connectionStatus,
     getPresence: () => ({ ...state.presence }),
     getChatMessages: () => [...state.chatMessages],

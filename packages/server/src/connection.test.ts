@@ -18,26 +18,27 @@ import { SignJWT } from "jose";
 function createMockWs(): {
   ws: {
     readyState: number;
-    on: (ev: string, fn: (data?: unknown) => void) => void;
-    emit: (ev: string, data?: unknown) => void;
+    on: (ev: string, fn: (data?: unknown, isBinary?: boolean) => void) => void;
+    emit: (ev: string, data?: unknown, isBinary?: boolean) => void;
     send: (data: string) => void;
     close: () => void;
   };
   sent: unknown[];
   emitMessage: (data: string | Buffer) => void;
+  emitBinaryMessage: (data: Buffer) => void;
   emitClose: () => void;
 } {
-  const listeners: Record<string, (data?: unknown) => void> = {};
+  const listeners: Record<string, (data?: unknown, isBinary?: boolean) => void> = {};
   const sent: unknown[] = [];
   return {
     ws: {
       readyState: 1,
       OPEN: 1,
-      on(ev: string, fn: (data?: unknown) => void) {
+      on(ev: string, fn: (data?: unknown, isBinary?: boolean) => void) {
         listeners[ev] = fn;
       },
-      emit(ev: string, data?: unknown) {
-        if (listeners[ev]) listeners[ev](data);
+      emit(ev: string, data?: unknown, isBinary?: boolean) {
+        if (listeners[ev]) listeners[ev](data, isBinary);
       },
       send(data: string) {
         sent.push(JSON.parse(data));
@@ -49,7 +50,10 @@ function createMockWs(): {
     sent,
     emitMessage(data: string | Buffer) {
       const raw = typeof data === "string" ? data : data.toString("utf8");
-      listeners["message"]?.(raw);
+      listeners["message"]?.(raw, false);
+    },
+    emitBinaryMessage(data: Buffer) {
+      listeners["message"]?.(data, true);
     },
     emitClose() {
       listeners["close"]?.();
@@ -79,6 +83,17 @@ describe("Connection", () => {
       type: MSG_ERROR,
       payload: { code: "INVALID_JSON", message: "Invalid JSON" },
     });
+  });
+
+  it("ignores binary messages when yjs is disabled", () => {
+    new Connection(mock.ws as import("ws").WebSocket, {
+      connectionId: "c1",
+      presenceThrottleMs: 0,
+      roomManager,
+      yjsEnabled: false,
+    });
+    mock.emitBinaryMessage(Buffer.from([0, 1, 2, 3]));
+    expect(mock.sent).toHaveLength(0);
   });
 
   it("sends INVALID_MESSAGE error for unknown message type", () => {

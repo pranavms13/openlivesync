@@ -14,6 +14,12 @@ For React hooks (optional):
 npm install @openlivesync/client react
 ```
 
+For Yjs CRDT sync (optional):
+
+```bash
+npm install @openlivesync/client yjs y-protocols lib0
+```
+
 ## Core usage
 
 Create a client, connect, and join a room. Subscribe to state updates:
@@ -38,6 +44,35 @@ client.broadcastEvent("cursor_move", { x: 10, y: 20 });
 client.sendChat("Hello!");
 client.leaveRoom();
 client.disconnect();
+```
+
+## Yjs CRDT sync (optional)
+
+If your server is started with `yjs` enabled, you can sync a `Y.Doc` over the same WebSocket connection using binary frames (compatible with the `y-websocket` message format).
+
+Important: the server routes Yjs messages to your **currently joined room**, so you should `joinRoom(roomId)` (or `useRoom(roomId)`) before sending Yjs updates.
+
+### Core (non-React)
+
+```ts
+import * as Y from "yjs";
+import { createLiveSyncClient } from "@openlivesync/client";
+import { LiveSyncYjsProvider } from "@openlivesync/client/yjs";
+
+const client = createLiveSyncClient({ url: "ws://localhost:3000/live", reconnect: true });
+client.connect();
+client.joinRoom("room1");
+
+const doc = new Y.Doc();
+const provider = new LiveSyncYjsProvider(doc, client, { awareness: true });
+provider.connect();
+
+// Edit shared state
+const ytext = doc.getText("content");
+ytext.insert(0, "Hello CRDT");
+
+// Optional: share user/cursor state via awareness
+provider.awareness.setLocalStateField("user", { name: "Alice", color: "#00f" });
 ```
 
 ## React usage
@@ -93,6 +128,41 @@ client.connect();
 </LiveSyncProvider>
 ```
 
+## React + Yjs (optional)
+
+The package also exports Yjs React helpers from `@openlivesync/client/yjs-react`.
+
+`useYDoc(roomId)` creates a `Y.Doc` and a `LiveSyncYjsProvider` and connects the provider while the hook is mounted. You still need to join the room (e.g. with `useRoom`) so the server can associate your binary messages with that room.
+
+```tsx
+import { useMemo } from "react";
+import { LiveSyncProvider, useRoom } from "@openlivesync/client/react";
+import { useAwareness, useYDoc } from "@openlivesync/client/yjs-react";
+
+function RoomCrdt({ roomId }: { roomId: string }) {
+  const { isInRoom } = useRoom(roomId, { autoJoin: true });
+  const { doc, provider } = useYDoc(isInRoom ? roomId : null, { awareness: true });
+  const awarenessStates = useAwareness(provider);
+
+  const ytext = useMemo(() => doc.getText("content"), [doc]);
+
+  return (
+    <div>
+      <button onClick={() => ytext.insert(0, "Hi ")}>Insert</button>
+      <div>Peers (awareness): {awarenessStates.size}</div>
+    </div>
+  );
+}
+
+export function App() {
+  return (
+    <LiveSyncProvider url="ws://localhost:3000/live">
+      <RoomCrdt roomId="room1" />
+    </LiveSyncProvider>
+  );
+}
+```
+
 ## API
 
 ### Core (`@openlivesync/client`)
@@ -117,5 +187,16 @@ client.connect();
     - For connect-only auth (token sent once at connect via provider's `getAuthToken`), omit `accessToken`, `getAccessToken`, and `identity.accessToken` here and rely on the connection identity established at upgrade.
 - **`usePresence(roomId)`** — Returns the presence map for the current room.
 - **`useChat(roomId)`** — Returns `{ messages, sendMessage }`.
+
+### Yjs (`@openlivesync/client/yjs`)
+
+- **`LiveSyncYjsProvider`** — Syncs a `Y.Doc` over `LiveSyncClient` binary frames.
+- **`LiveSyncYjsProviderOptions`** — `{ awareness?: boolean }` (default: enabled).
+
+### Yjs React (`@openlivesync/client/yjs-react`)
+
+- **`useYDoc(roomId, options?)`** — Returns `{ doc, provider }`.
+- **`useYjsProvider(roomId, options?)`** — Returns the `LiveSyncYjsProvider`.
+- **`useAwareness(provider)`** — Returns a reactive `Map` of awareness states.
 
 Protocol types and `MSG_*` constants are exported from the main entry for typing or custom handling.

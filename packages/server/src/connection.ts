@@ -47,6 +47,7 @@ export interface ConnectionOptions {
   presenceThrottleMs: number;
   roomManager: RoomManager;
   auth?: AuthOptions;
+  yjsEnabled?: boolean;
 }
 
 export class Connection {
@@ -59,6 +60,7 @@ export class Connection {
   private readonly presenceThrottleMs: number;
   private readonly roomManager: RoomManager;
   private readonly auth: AuthOptions | undefined;
+  private readonly yjsEnabled: boolean;
   private currentRoomId: string | null = null;
   private lastPresenceUpdate = 0;
   private closed = false;
@@ -73,8 +75,16 @@ export class Connection {
     this.presenceThrottleMs = options.presenceThrottleMs;
     this.roomManager = options.roomManager;
     this.auth = options.auth;
+    this.yjsEnabled = options.yjsEnabled ?? false;
 
-    this.ws.on("message", (data: Buffer | string) => this.handleMessage(data));
+    this.ws.on("message", (data: Buffer | string, isBinary: boolean) => {
+      if (isBinary) {
+        if (!this.yjsEnabled) return;
+        this.handleBinaryMessage(data as Buffer);
+        return;
+      }
+      this.handleMessage(data);
+    });
     this.ws.on("close", () => this.handleClose());
   }
 
@@ -149,6 +159,13 @@ export class Connection {
           provider: this.provider,
           presence: {},
           send: (m) => this.send(m),
+          sendBinary: this.yjsEnabled
+            ? (data: Uint8Array) => {
+                if (this.ws.readyState === this.ws.OPEN) {
+                  this.ws.send(data);
+                }
+              }
+            : undefined,
         };
         await room.join(handle, presence);
         break;
@@ -198,6 +215,14 @@ export class Connection {
         }
         break;
       }
+    }
+  }
+
+  private handleBinaryMessage(data: Buffer): void {
+    if (this.closed || !this.currentRoomId) return;
+    const room = this.roomManager.get(this.currentRoomId);
+    if (room) {
+      room.handleYjsMessage(this.connectionId, new Uint8Array(data));
     }
   }
 

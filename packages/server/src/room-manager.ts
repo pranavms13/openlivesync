@@ -5,11 +5,13 @@
 import { Room } from "./room.js";
 import type { ChatStorage } from "./storage/chat-storage.js";
 import type { RoomAdapter } from "./adapters/adapter.js";
+import type { YjsDocStore } from "./yjs/doc-store.js";
 
 export interface RoomManagerOptions {
   chatStorage: ChatStorage;
   historyLimit: number;
   adapter?: RoomAdapter;
+  yjsDocStore?: YjsDocStore;
 }
 
 export class RoomManager {
@@ -28,6 +30,7 @@ export class RoomManager {
         chatStorage: this.options.chatStorage,
         historyLimit: this.options.historyLimit,
         adapter: this.options.adapter,
+        yjsDocStore: this.options.yjsDocStore,
       });
       this.rooms.set(roomId, room);
     }
