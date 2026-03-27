@@ -3,14 +3,14 @@
 [![CI](https://github.com/pranavms13/openlivesync/actions/workflows/ci.yml/badge.svg)](https://github.com/pranavms13/openlivesync/actions/workflows/ci.yml)
 [![codecov](https://codecov.io/gh/pranavms13/openlivesync/branch/main/graph/badge.svg)](https://codecov.io/gh/pranavms13/openlivesync)
 
-Real-time **presence**, **collaboration events**, and **chat** with a small server package and an optional client.
+Real-time **presence**, **collaboration events**, **chat**, and **CRDT document sync** with a small server package and an optional client.
 
 ## Monorepo structure
 
 | Package | Description |
 |--------|-------------|
-| [packages/server](./packages/server) | Node.js server: WebSocket API, rooms, presence, broadcast, chat with pluggable storage (in-memory, Postgres, MySQL, SQLite). |
-| [packages/client](./packages/client) | Browser client: WebSocket API, presence, broadcast, chat; optional React hooks. |
+| [packages/server](./packages/server) | Node.js server: WebSocket API, rooms, presence, broadcast, chat with pluggable storage (in-memory, Postgres, MySQL, SQLite), and optional Yjs CRDT sync. |
+| [packages/client](./packages/client) | Browser client: WebSocket API, presence, broadcast, chat; optional React hooks and Yjs CRDT sync. |
 
 ## Examples
 
@@ -18,6 +18,8 @@ Real-time **presence**, **collaboration events**, and **chat** with a small serv
 |--------|-------------|
 | [examples/server](./examples/server) | Node.js server using `createServer`, path, chat, and optional `createTokenAuth`. |
 | [examples/client](./examples/client) | React app using `LiveSyncProvider`, `useConnectionStatus`, `useRoom`, `usePresence`, `useChat`, and `useLiveSyncClient`. |
+| [examples/reactflow-server](./examples/reactflow-server) | Minimal server with Yjs enabled for the ReactFlow collaborative demo. |
+| [examples/reactflow-client](./examples/reactflow-client) | React + ReactFlow collaborative diagram editor using Yjs CRDT sync, live cursors, and shared node state. |
 
 From repo root: `npm run build`, then run `npm run dev` to start both the example server and client concurrently. Open the client in multiple tabs to see presence and chat in real time.
 
@@ -42,6 +44,59 @@ npm install
 
 - **Server** (`cd packages/server`): `npm run build`, `npm run test`, `npm run test:watch`, `npm run test:coverage`. See [packages/server/README.md](./packages/server/README.md) for API and usage.
 - **Client** (`cd packages/client`): `npm run build`. See [packages/client/README.md](./packages/client/README.md) for API and usage.
+
+## Yjs CRDT sync
+
+OpenLiveSync supports conflict-free document synchronization via [Yjs](https://yjs.dev/). Binary Yjs protocol messages are multiplexed alongside the existing JSON protocol over the same WebSocket connection — backward-compatible with clients that don't use Yjs.
+
+**Server** — enable by passing `yjs: {}` in server options:
+
+```ts
+import { createWebSocketServer } from "@openlivesync/server";
+
+createWebSocketServer(httpServer, {
+  path: "/live",
+  yjs: {
+    persistence: createInMemoryYjsPersistence(), // optional; swap for your DB adapter
+    gcEnabled: true,
+  },
+});
+```
+
+Install peer deps in your server app: `npm install yjs y-protocols lib0`
+
+**Client** — sync a `Y.Doc` over the same connection:
+
+```ts
+import * as Y from "yjs";
+import { createLiveSyncClient } from "@openlivesync/client";
+import { LiveSyncYjsProvider } from "@openlivesync/client/yjs";
+
+const client = createLiveSyncClient({ url: "ws://localhost:3000/live", reconnect: true });
+client.connect();
+client.joinRoom("room1");
+
+const doc = new Y.Doc();
+const provider = new LiveSyncYjsProvider(doc, client, { awareness: true });
+provider.connect();
+```
+
+Install peer deps in your client app: `npm install yjs y-protocols lib0`
+
+**React hooks** (`@openlivesync/client/yjs-react`):
+
+```tsx
+import { useYDoc, useAwareness } from "@openlivesync/client/yjs-react";
+
+function RoomCrdt({ roomId }) {
+  const { isInRoom } = useRoom(roomId, { autoJoin: true });
+  const { doc, provider } = useYDoc(isInRoom ? roomId : null, { awareness: true });
+  const awarenessStates = useAwareness(provider);
+  // use doc.getText("content"), doc.getMap(...), etc.
+}
+```
+
+See [packages/client/README.md](./packages/client/README.md) and [packages/server/README.md](./packages/server/README.md) for full Yjs API docs.
 
 ## License
 
