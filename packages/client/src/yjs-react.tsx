@@ -3,13 +3,12 @@
  * Import from "@openlivesync/client/yjs-react".
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import * as Y from "yjs";
-import type * as awarenessProtocol from "y-protocols/awareness";
 import { LiveSyncYjsProvider, type LiveSyncYjsProviderOptions } from "./yjs-provider.js";
 import { useLiveSyncClient } from "./react-entry.js";
 
-export interface UseYDocOptions extends LiveSyncYjsProviderOptions {}
+export type UseYDocOptions = LiveSyncYjsProviderOptions;
 
 export interface UseYDocReturn {
   doc: Y.Doc;
